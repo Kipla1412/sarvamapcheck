@@ -53,6 +53,8 @@ class Session:
         self.audio_buffer: list[bytes] = []
         self.silence_chunks: int = 0
         self.agent_speaking = False
+        self.speech_frames = 0
+        self.non_speech_frames = 0
 
     async def _request_user_confirmation(self, confirmation):
 

@@ -262,6 +262,18 @@ class Agent:
         # Add new audio chunk to buffer
         active_session.audio_buffer.append(audio)
 
+        # Skip processing if we're already processing this utterance
+        if hasattr(active_session, 'is_processing') and active_session.is_processing:
+            print("DEBUG: Already processing, skipping audio chunk")
+            return
+
+        # Add cooldown after processing to prevent immediate re-processing
+        if hasattr(active_session, 'last_process_time'):
+            import time
+            if time.time() - active_session.last_process_time < 2.0:  # 2 second cooldown
+                print("DEBUG: In cooldown period, skipping")
+                return
+
         # Speech detection + barge-in handling
         if self.vad.is_speech(audio):
 
@@ -281,8 +293,15 @@ class Agent:
             active_session.silence_chunks += 1
         
         # Process if we have speech followed by silence (user finished speaking)
-        if len(active_session.audio_buffer) > 10 and active_session.silence_chunks >= 6:  # More responsive
-            print("DEBUG: User finished speaking, processing...")
+        if len(active_session.audio_buffer) > 10 and active_session.silence_chunks >= 4:  # Faster response while preventing multiple processing
+            import time
+            timestamp = time.strftime("%H:%M:%S", time.localtime())
+            print(f"DEBUG: [{timestamp}] User finished speaking, processing...")
+            print(f"DEBUG: Buffer size: {len(active_session.audio_buffer)}, Silence chunks: {active_session.silence_chunks}")
+            
+            # Set processing flag to prevent multiple processing
+            active_session.is_processing = True
+            active_session.last_process_time = time.time()
             
             # Combine all buffered audio
             total_audio = b''.join(active_session.audio_buffer)
@@ -290,10 +309,11 @@ class Agent:
             # Reset buffers
             active_session.reset_audio_buffer()
             
-            # Only process if we have enough audio (at least 0.5 seconds)
-            min_bytes = int(16000 * 1.0 * 2)
+            # Only process if we have enough audio (at least 0.3 seconds)
+            min_bytes = int(16000 * 0.3 * 2)
             if len(total_audio) < min_bytes:
                 print("DEBUG: Too short, ignoring")
+                active_session.is_processing = False
                 return
         else:
             # Keep collecting audio
@@ -321,44 +341,64 @@ class Agent:
             )
             
             # DEBUG: Log what STT returned
-            print(f"DEBUG: STT returned: '{user_text}' (length: {len(user_text) if user_text else 0})")
+            import time
+            timestamp = time.strftime("%H:%M:%S", time.localtime())
+            print(f"DEBUG: [{timestamp}] STT returned: '{user_text}' (length: {len(user_text) if user_text else 0})")
+            print(f"DEBUG: Audio processed: {len(total_audio)} bytes, duration: {len(total_audio)/(16000*2):.2f}s")
             
         except Exception as e:
             print(f"DEBUG: STT Exception: {str(e)}")
             yield AgentEvent.agent_error(f"STT/Processing Error: {str(e)}")
+            active_session.is_processing = False
             return
 
         # Handle empty speech
         if not user_text or not user_text.strip():
             print("DEBUG: No speech detected or empty transcription")
             yield AgentEvent.agent_error("No speech detected - please speak clearly")
+            active_session.is_processing = False
             return
 
         # Filter out very short transcriptions (likely noise)
-        clean_text = user_text.strip()
+        clean_text = user_text.strip().lower()
 
         if len(clean_text) < 3:
             print("DEBUG: Transcription too short, likely noise")
+            active_session.is_processing = False
             return
 
         # Send user question to frontend
         yield AgentEvent.user_question(user_text.strip())
 
         # 3. Run normal agent loop
+        import time
+        llm_start = time.time()
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        print(f"DEBUG: [{timestamp}] Starting LLM processing for: '{user_text.strip()}'")
+        
         async for event in self.run(user_text):
             yield event
 
             # 4. Convert final response → speech
             if event.type == AgentEventType.TEXT_COMPLETE:
                 try:
+                    llm_end = time.time()
+                    timestamp = time.strftime("%H:%M:%S", time.localtime())
+                    print(f"DEBUG: [{timestamp}] LLM completed in {llm_end-llm_start:.2f}s")
+                    print(f"DEBUG: Response: '{event.data['content'][:100]}...'")
+                    
                     tts = self.config.tts_engine
                     
                     # Wrap synthesize in to_thread so it doesn't block the async loop
+                    tts_start = time.time()
                     audio_out, sr = await asyncio.to_thread(
                         tts.synthesize, 
                         event.data["content"]
 
                     )
+                    tts_end = time.time()
+                    timestamp = time.strftime("%H:%M:%S", time.localtime())
+                    print(f"DEBUG: [{timestamp}] TTS completed in {tts_end-tts_start:.2f}s")
 
                     active_session.agent_speaking = True
 
@@ -370,6 +410,11 @@ class Agent:
 
                 except Exception as e:
                     yield AgentEvent.agent_error(f"TTS Error: {str(e)}")
+        
+        # Clear processing flag when done
+        active_session.is_processing = False
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        print(f"DEBUG: [{timestamp}] Processing cycle completed")
         
     async def __aenter__(self) -> Agent:
         

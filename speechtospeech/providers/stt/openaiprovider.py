@@ -26,7 +26,8 @@ class OpenAISTTProvider:
         }
 
         data = {
-            "model": self.model
+            "model": self.model,
+            "language": "en"  # Force English-only transcription
         }
 
         try:

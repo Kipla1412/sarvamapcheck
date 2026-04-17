@@ -352,338 +352,315 @@
 </body>
 
 </html> -->
-
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Healthcare Voice Intake Agent</title>
+<title>Healthcare Voice Intake Agent</title>
 
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background: #0f172a;
-            color: white;
-            display: flex;
-            justify-content: center;
-        }
+<style>
+body{
+    margin:0;
+    font-family:Arial, Helvetica, sans-serif;
+    background:#0f172a;
+    color:white;
+    display:flex;
+    justify-content:center;
+}
 
-        .container {
-            width: 700px;
-            margin-top: 40px;
-        }
+.container{
+    width:700px;
+    margin-top:40px;
+}
 
-        .header {
-            text-align: center;
-        }
+.header{text-align:center;}
 
-        .status {
-            margin-top: 10px;
-            font-size: 14px;
-        }
+.status{margin-top:10px;font-size:14px;}
 
-        .connected {
-            color: #22c55e;
-        }
+.connected{color:#22c55e;}
+.disconnected{color:#ef4444;}
 
-        .disconnected {
-            color: #ef4444;
-        }
+.chat{
+    margin-top:30px;
+    height:350px;
+    overflow-y:auto;
+    background:#1e293b;
+    border-radius:10px;
+    padding:20px;
+}
 
-        .chat {
-            margin-top: 30px;
-            height: 350px;
-            overflow-y: auto;
-            background: #1e293b;
-            border-radius: 10px;
-            padding: 20px;
-        }
+.message{margin-bottom:15px;}
 
-        .message {
-            margin-bottom: 15px;
-        }
+.user{text-align:right;}
 
-        .user {
-            text-align: right;
-        }
+.user span{
+    background:#2563eb;
+    padding:10px 14px;
+    border-radius:12px;
+}
 
-        .user span {
-            background: #2563eb;
-            padding: 10px 14px;
-            border-radius: 12px;
-        }
+.ai span{
+    background:#334155;
+    padding:10px 14px;
+    border-radius:12px;
+}
 
-        .ai span {
-            background: #334155;
-            padding: 10px 14px;
-            border-radius: 12px;
-        }
+.controls{
+    margin-top:30px;
+    text-align:center;
+}
 
-        .controls {
-            margin-top: 30px;
-            text-align: center;
-        }
+button{
+    width:120px;
+    height:120px;
+    border-radius:60px;
+    border:none;
+    background:#6366f1;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+}
 
-        button {
-            width: 120px;
-            height: 120px;
-            border-radius: 60px;
-            border: none;
-            background: #6366f1;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-        }
+button.listening{
+    background:#ef4444;
+}
 
-        button.listening {
-            background: #ef4444;
-            animation: pulse 1s infinite;
-        }
+.loader{
+    margin-top:10px;
+    font-size:14px;
+    color:#94a3b8;
+}
+</style>
 
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-
-        .loader {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #94a3b8;
-        }
-    </style>
 </head>
 
 <body>
 
 <div class="container">
 
-    <div class="header">
-        <h1>Healthcare Voice Intake Agent</h1>
-        <div id="status" class="status disconnected">Disconnected</div>
-    </div>
+<div class="header">
+<h1>Healthcare Voice Intake Agent</h1>
+<div id="status" class="status disconnected">Disconnected</div>
+</div>
 
-    <div id="chat" class="chat"></div>
+<div id="chat" class="chat"></div>
 
-    <div class="controls">
-        <button id="recordBtn">🎤 Speak</button>
-        <div id="loader" class="loader"></div>
-    </div>
+<div class="controls">
+<button id="recordBtn">🎤 Start</button>
+<div id="loader" class="loader"></div>
+</div>
 
 </div>
 
 <script>
 
 let socket
-let stream = null
-let processor = null
-let source = null
-let audioContext = null
-let currentAudio = null
-let isRecording = false
-let currentAIMessage = null
+let stream=null
+let processor=null
+let source=null
+let audioContext=null
+let isRecording=false
+let currentAudio=null
+let currentAIMessage=null
 
-const chat = document.getElementById("chat")
-const status = document.getElementById("status")
-const loader = document.getElementById("loader")
-const recordBtn = document.getElementById("recordBtn")
+const chat=document.getElementById("chat")
+const status=document.getElementById("status")
+const loader=document.getElementById("loader")
+const recordBtn=document.getElementById("recordBtn")
 
-function addMessage(text, type) {
+function addMessage(text,type){
 
-    const div = document.createElement("div")
-    div.className = "message " + type
+    const div=document.createElement("div")
+    div.className="message "+type
 
-    const span = document.createElement("span")
-    span.innerText = text
+    const span=document.createElement("span")
+    span.innerText=text
 
     div.appendChild(span)
     chat.appendChild(div)
 
-    chat.scrollTop = chat.scrollHeight
+    chat.scrollTop=chat.scrollHeight
 }
 
-function connectSocket() {
+function connectSocket(){
 
-    const token = "eyJhbGciOiJFZERTQSIsImtpZCI6InZ3Q0tiRjJvZXVDRWdUUHY5RTRsSkpGcHdDQmpvanBIIn0.eyJpYXQiOjE3NzU3MDgzNzYsIm5hbWUiOiJEZW1vIFVzZXIiLCJlbWFpbCI6ImRlbW91c2VyLmduckBnbWFpbC5jb20iLCJlbWFpbFZlcmlmaWVkIjpmYWxzZSwiaW1hZ2UiOm51bGwsImNyZWF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVzZXJuYW1lIjpudWxsLCJkaXNwbGF5VXNlcm5hbWUiOm51bGwsInR3b0ZhY3RvckVuYWJsZWQiOmZhbHNlLCJyb2xlIjoiZ3Vlc3QiLCJiYW5uZWQiOmZhbHNlLCJiYW5SZWFzb24iOm51bGwsImJhbkV4cGlyZXMiOm51bGwsImlkIjoicVZuYTJnTU01cGRVaVpvUGNCcGR6Q0VKRm1PeU5RU1UiLCJhY3RpdmVPcmdhbml6YXRpb25JZCI6IjQ4NzIzYjE3LTQwNmQtNDZlOS1hZmI5LTZlMTdkYzc4OGZkYSIsImFjdGl2ZVRlYW1JZCI6bnVsbCwiYXBwcyI6W10sInBlcm1pc3Npb25zIjpbImFnZW50OmNoYXQiXSwib3JnYW5pemF0aW9ucyI6W3siaWQiOiI0ODcyM2IxNy00MDZkLTQ2ZTktYWZiOS02ZTE3ZGM3ODhmZGEiLCJuYW1lIjoiZHJnb2RseSIsInNsdWciOiJkcmdvZGx5IiwibG9nbyI6bnVsbH1dLCJzdWIiOiJxVm5hMmdNTTVwZFVpWm9QY0JwZHpDRUpGbU95TlFTVSIsImV4cCI6MTc3NTcwOTI3NiwiaXNzIjoiaHR0cHM6Ly9pYW0uZHJnb2RseS5jb20iLCJhdWQiOiJodHRwczovL2lhbS5kcmdvZGx5LmNvbSJ9.s5ycZrLxFvXOJ8wJhSdjiOCXLd7K_RHOAjQwNqu4f16H9-ofrMl3ggVHqOlaepBFupdqzubhGBVrSxChfXo7CA"
-    socket = new WebSocket(`ws://127.0.0.1:8000/ws/chatting?token=${token}`)
-    socket.binaryType = "arraybuffer"
+const token= "eyJhbGciOiJFZERTQSIsImtpZCI6InZ3Q0tiRjJvZXVDRWdUUHY5RTRsSkpGcHdDQmpvanBIIn0.eyJpYXQiOjE3NzU3NDc0NTgsIm5hbWUiOiJEZW1vIFVzZXIiLCJlbWFpbCI6ImRlbW91c2VyLmduckBnbWFpbC5jb20iLCJlbWFpbFZlcmlmaWVkIjpmYWxzZSwiaW1hZ2UiOm51bGwsImNyZWF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVzZXJuYW1lIjpudWxsLCJkaXNwbGF5VXNlcm5hbWUiOm51bGwsInR3b0ZhY3RvckVuYWJsZWQiOmZhbHNlLCJyb2xlIjoiZ3Vlc3QiLCJiYW5uZWQiOmZhbHNlLCJiYW5SZWFzb24iOm51bGwsImJhbkV4cGlyZXMiOm51bGwsImlkIjoicVZuYTJnTU01cGRVaVpvUGNCcGR6Q0VKRm1PeU5RU1UiLCJhY3RpdmVPcmdhbml6YXRpb25JZCI6IjQ4NzIzYjE3LTQwNmQtNDZlOS1hZmI5LTZlMTdkYzc4OGZkYSIsImFjdGl2ZVRlYW1JZCI6bnVsbCwiYXBwcyI6W10sInBlcm1pc3Npb25zIjpbImFnZW50OmNoYXQiXSwib3JnYW5pemF0aW9ucyI6W3siaWQiOiI0ODcyM2IxNy00MDZkLTQ2ZTktYWZiOS02ZTE3ZGM3ODhmZGEiLCJuYW1lIjoiZHJnb2RseSIsInNsdWciOiJkcmdvZGx5IiwibG9nbyI6bnVsbH1dLCJzdWIiOiJxVm5hMmdNTTVwZFVpWm9QY0JwZHpDRUpGbU95TlFTVSIsImV4cCI6MTc3NTc0ODM1OCwiaXNzIjoiaHR0cHM6Ly9pYW0uZHJnb2RseS5jb20iLCJhdWQiOiJodHRwczovL2lhbS5kcmdvZGx5LmNvbSJ9.j-Y2nJZnLMMJLYyMplPdo4FfIa9Amii9L2UqsMz3M6ngLPQn484ghwjvK8KnirN72NI9Lp6ihJtsrYMW1zfDAQ"
 
-    socket.onopen = () => {
-        status.innerText = "Connected"
-        status.className = "status connected"
+socket=new WebSocket(`ws://127.0.0.1:8000/ws/chatting?token=${token}`)
+socket.binaryType="arraybuffer"
+
+socket.onopen=()=>{
+    status.innerText="Connected"
+    status.className="status connected"
+}
+
+socket.onclose=()=>{
+    status.innerText="Disconnected"
+    status.className="status disconnected"
+    setTimeout(connectSocket,2000)
+}
+
+socket.onerror=(e)=>{
+    console.log("WebSocket error",e)
+}
+
+socket.onmessage=(event)=>{
+
+    if(event.data instanceof ArrayBuffer){
+
+        const blob=new Blob([event.data],{type:"audio/wav"})
+
+        if(currentAudio){
+            currentAudio.pause()
+        }
+
+        currentAudio=new Audio(URL.createObjectURL(blob))
+        currentAudio.play()
+
+        return
     }
 
-    socket.onclose = () => {
-        status.innerText = "Disconnected"
-        status.className = "status disconnected"
+    let data=JSON.parse(event.data)
 
-        setTimeout(connectSocket, 2000)
+    if(data.type==="user_question"){
+
+        addMessage(data.content,"user")
+
+        loader.innerText="AI thinking..."
+        currentAIMessage=null
     }
 
-    socket.onerror = (e) => {
-        console.error("WebSocket error:", e)
+    if(data.type==="text"){
+
+        loader.innerText=""
+
+        // Play immediate feedback sound when text starts
+        const feedbackAudio=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=")
+        feedbackAudio.play().catch(e=>console.log("Feedback play error:",e))
+
+        if(!currentAIMessage){
+
+            currentAIMessage=document.createElement("div")
+            currentAIMessage.className="message ai"
+
+            const span=document.createElement("span")
+            span.id="ai-stream"
+
+            currentAIMessage.appendChild(span)
+            chat.appendChild(currentAIMessage)
+        }
+
+        const span=document.getElementById("ai-stream")
+        span.innerText+=data.content
+
+        chat.scrollTop=chat.scrollHeight
     }
 
-    socket.onmessage = (event) => {
-
-        // AUDIO RESPONSE
-        if (event.data instanceof ArrayBuffer) {
-
-            const blob = new Blob([event.data], { type: "audio/wav" })
-
-            if (currentAudio) {
-                currentAudio.pause()
-                currentAudio = null
-            }
-
-            currentAudio = new Audio(URL.createObjectURL(blob))
-            currentAudio.play().catch(err => {
-                console.log("Audio play error", err)
-            })
-
-            return
-        }
-
-        let data
-
-        try {
-            data = JSON.parse(event.data)
-        } catch (err) {
-            console.error("Invalid JSON", event.data)
-            return
-        }
-
-        // USER MESSAGE
-        if (data.type === "user_question") {
-
-            addMessage(data.content, "user")
-
-            loader.innerText = "AI thinking..."
-            currentAIMessage = null
-        }
-
-        // STREAMING AI TEXT
-        if (data.type === "text") {
-
-            loader.innerText = ""
-
-            if (!currentAIMessage) {
-
-                currentAIMessage = document.createElement("div")
-                currentAIMessage.className = "message ai"
-
-                const span = document.createElement("span")
-                span.id = "ai-stream"
-
-                currentAIMessage.appendChild(span)
-                chat.appendChild(currentAIMessage)
-            }
-
-            const span = document.getElementById("ai-stream")
-            span.innerText += data.content
-
-            chat.scrollTop = chat.scrollHeight
-        }
-
-        // ERROR MESSAGE
-        if (data.type === "error") {
-
-            loader.innerText = ""
-            addMessage("Error: " + data.message, "ai")
-        }
+    if(data.type==="error"){
+        loader.innerText=""
+        addMessage("Error: "+data.message,"ai")
     }
+
+}
+
 }
 
 connectSocket()
 
-recordBtn.onmousedown = async () => {
+async function startRecording(){
 
-    if (isRecording) return
+    stream=await navigator.mediaDevices.getUserMedia({
+        audio:{
+            echoCancellation:true,
+            noiseSuppression:true,
+            autoGainControl:true
+        }
+    })
 
-    try {
+    audioContext=new AudioContext({sampleRate:16000})
 
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    console.log("Sample rate:",audioContext.sampleRate)
 
-        audioContext = new AudioContext({ sampleRate: 16000 })
+    source=audioContext.createMediaStreamSource(stream)
 
-        source = audioContext.createMediaStreamSource(stream)
+    processor=audioContext.createScriptProcessor(1024,1,1)
 
-        processor = audioContext.createScriptProcessor(1024, 1, 1)
+    source.connect(processor)
+    processor.connect(audioContext.destination)
 
-        source.connect(processor)
-        processor.connect(audioContext.destination)
+    processor.onaudioprocess=(event)=>{
 
-        isRecording = true
+        if(!isRecording) return
 
-        processor.onaudioprocess = (event) => {
+        const input=event.inputBuffer.getChannelData(0)
 
-            if (!isRecording) return
+        const pcm16=new Int16Array(input.length)
 
-            const input = event.inputBuffer.getChannelData(0)
-
-            // Volume detection
-            let volume = 0
-            for (let i = 0; i < input.length; i++) {
-                volume += input[i] * input[i]
-            }
-
-            volume = Math.sqrt(volume / input.length)
-
-            // // Ignore silence
-            // if (volume < 0.015) return
-            console.log("volume:", volume)
-
-            const pcm16 = new Int16Array(input.length)
-
-            for (let i = 0; i < input.length; i++) {
-                pcm16[i] = Math.max(-1, Math.min(1, input[i])) * 32767
-            }
-
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(pcm16.buffer)
-            }
+        for(let i=0;i<input.length;i++){
+            pcm16[i]=Math.max(-1,Math.min(1,input[i]))*32767
         }
 
-        recordBtn.classList.add("listening")
-        recordBtn.innerText = "Listening..."
-
-    } catch (err) {
-
-        console.error(err)
-        status.innerText = "Mic permission denied"
+        if(socket.readyState===WebSocket.OPEN){
+            socket.send(pcm16.buffer)
+        }
     }
+
 }
 
-recordBtn.onmouseup = () => {
+function stopRecording(){
 
-    isRecording = false
-
-    if (processor) {
+    if(processor){
         processor.disconnect()
-        processor = null
+        processor=null
     }
 
-    if (source) {
+    if(source){
         source.disconnect()
-        source = null
+        source=null
     }
 
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop())
-        stream = null
+    if(stream){
+        stream.getTracks().forEach(track=>track.stop())
+        stream=null
     }
 
-    if (audioContext) {
+    if(audioContext){
         audioContext.close()
-        audioContext = null
+        audioContext=null
     }
 
-    recordBtn.classList.remove("listening")
-    recordBtn.innerText = "🎤 Speak"
+}
+
+// Start continuous recording when page loads
+window.onload=async()=>{
+    await startRecording()
+    isRecording=true
+    recordBtn.classList.add("listening")
+    recordBtn.innerText="Listening..."
+}
+
+recordBtn.onclick=async()=>{
+
+    if(!isRecording){
+
+        await startRecording()
+
+        isRecording=true
+        recordBtn.classList.add("listening")
+        recordBtn.innerText="Listening..."
+
+    }else{
+
+        stopRecording()
+
+        isRecording=false
+        recordBtn.classList.remove("listening")
+        recordBtn.innerText="Start"
+
+    }
+
 }
 
 </script>
 
 </body>
 </html>
-

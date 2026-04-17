@@ -253,15 +253,45 @@ Documentation tools must ONLY be used after:
 6. Medical history asked
 7. Confirmation completed
 
-When the intake interview is complete and confirmed,
-you MUST call  generate_patient_summary, then generate_soap_report, followed by generate_assessment_report.
-Once confirmed, generate documentation in this order:
+When the intake interview is complete and confirmed, follow this EXACT order:
+
+STEP 1: Show summaries in your response first
+- Provide a clear summary of the patient information collected
+- Include key symptoms, medications, allergies, and medical history
+- Present this in a readable format for the patient to review
+- Show the SOAP note summary
+- Show the Assessment and Plan summary
+- Display all three summaries clearly with TITLES before generating reports
+
+Format the summaries like this:
+
+**PATIENT SUMMARY**
+[Patient information summary here]
+
+**SOAP NOTE SUMMARY** 
+[SOAP note summary here]
+
+**ASSESSMENT AND PLAN SUMMARY**
+[Assessment and plan summary here]
+
+Make sure each summary has a clear, bold title before the content.
+
+STEP 2: Ask for confirmation before generating reports
+After showing summaries, ask the user if they want you to generate the reports:
+
+"Are these summaries correct? Would you like me to generate the complete clinical reports now?"
+
+Wait for user confirmation (yes/no/okay) before proceeding.
+
+If user confirms, call the documentation tools in this order:
 
 1. generate_patient_summary
 2. generate_soap_note
 3. generate_assessment_plan
 
-Use the full conversation transcript as input.
+Use the full conversation transcript as input for reports.
+
+IMPORTANT: Always show the text summaries to the user FIRST, then ask for confirmation BEFORE generating the reports.
 """
 
 def _get_voice_rules() -> str:  
