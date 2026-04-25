@@ -1,0 +1,119 @@
+<!-- <!DOCTYPE html>
+<html>
+<body>
+
+<button onclick="start()">🎤 Start</button>
+
+<script>
+let ws;
+
+async function start() {
+    ws = new WebSocket("ws://localhost:8000/audio");
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(stream);
+
+    const processor = audioContext.createScriptProcessor(1024, 1, 1);
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+
+        // convert float → int16
+        const buffer = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+            buffer[i] = input[i] * 32767;
+        }
+
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(buffer.buffer);
+        }
+    };
+}
+</script>
+
+</body>
+</html> -->
+
+<!DOCTYPE html>
+<html>
+<body>
+
+<button onclick="start()">🎤 Start</button>
+<button onclick="stop()">🛑 Stop</button>
+
+<script>
+let ws;
+let processor;
+let audioContext;
+
+async function start() {
+
+    const token = "eyJhbGciOiJFZERTQSIsImtpZCI6IjRFbTdEcjI3bUtsdjZJc0JJUldFSHl0dmpiRnROWWxHIn0.eyJpYXQiOjE3NzcwMzg2OTcsIm5hbWUiOiJEZW1vIFVzZXIiLCJlbWFpbCI6ImRlbW91c2VyLmduckBnbWFpbC5jb20iLCJlbWFpbFZlcmlmaWVkIjpmYWxzZSwiaW1hZ2UiOm51bGwsImNyZWF0ZWRBdCI6IjIwMjYtMDQtMTlUMDc6NTc6MTYuNjQ0WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDQtMTlUMDc6NTc6MTYuNjQ0WiIsInVzZXJuYW1lIjoiZGVtb3VzZXI0ODg2IiwiZGlzcGxheVVzZXJuYW1lIjpudWxsLCJ0d29GYWN0b3JFbmFibGVkIjpmYWxzZSwicm9sZSI6Imd1ZXN0IiwiYmFubmVkIjpmYWxzZSwiYmFuUmVhc29uIjpudWxsLCJiYW5FeHBpcmVzIjpudWxsLCJpZCI6InVEdEoyMk9RcDFPeHBHTERoaTF2bEJ3YTFoc0FndUxZIiwiYWN0aXZlT3JnYW5pemF0aW9uSWQiOiI1NGMyMTRkMC02YTdiLTRkZDEtODJiNi05YjcwMzY4ODI3ZjgiLCJhY3RpdmVUZWFtSWQiOm51bGwsImFwcHMiOlt7ImlkIjoiY21vNWgxamRwMDAwMDQyb2FpbHNxMzJtciIsIm5hbWUiOiJUZWxlbWVkaWNpbmUiLCJzbHVnIjoidGVsZW1lZGljaW5lIiwibWVudXMiOlt7ImlkIjoiY21vNWgxamgzMDAwMTQyb2FoYTgxa29hbSIsImxhYmVsIjoiUEFUSUVOVCIsInNsdWciOiJwYXRpZW50IiwiaWNvbiI6bnVsbCwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW81aDFqaTIwMDAyNDJvYXdqMzNtZThvIiwibGFiZWwiOiJEYXNoYm9hcmQiLCJzbHVnIjoiZGFzaGJvYXJkIiwiaWNvbiI6ImxheW91dC1kYXNoYm9hcmQiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQiLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbImRhc2hib2FyZDpyZWFkIl0sImNoaWxkcmVuIjpbXX0seyJpZCI6ImNtbzVoMWppbDAwMDM0Mm9hazQ4Nm80NHciLCJsYWJlbCI6IlByb2ZpbGUiLCJzbHVnIjoicHJvZmlsZSIsImljb24iOiJ1c2VyLWNvZyIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudC9wcm9maWxlIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwcm9maWxlOnJlYWQiXSwiY2hpbGRyZW4iOltdfSx7ImlkIjoiY21vNWgxamowMDAwNDQyb2FrYWQ0MHNuYyIsImxhYmVsIjoiQXBwb2ludG1lbnRzIiwic2x1ZyI6InBhdGllbnQtYXBwb2ludG1lbnQiLCJpY29uIjoiY2FsZW5kYXItY2xvY2siLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LWFwcG9pbnRtZW50OnJlYWQiXSwiY2hpbGRyZW4iOltdfSx7ImlkIjoiY21vNWgxamplMDAwNTQyb2E5bG9uZW1nMiIsImxhYmVsIjoiQm9vayBBcHBvaW50bWVudCIsInNsdWciOiJib29rLWFwcG9pbnRtZW50IiwiaWNvbiI6ImNhbGVuZGFyLXBsdXMiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzL2Jvb2siLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbImJvb2stYXBwb2ludG1lbnQ6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW81aDFqanEwMDA2NDJvYWlveDJ0MGR1IiwibGFiZWwiOiJBcHBvaW50bWVudCBJbnRha2UiLCJzbHVnIjoiYXBwb2ludG1lbnQtaW50YWtlIiwiaWNvbiI6ImNhbGVuZGFyLXBsdXMiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzL2ludGFrZSIsInR5cGUiOiJJVEVNIiwicGVybWlzc2lvbktleXMiOlsiYXBwb2ludG1lbnQtaW50YWtlOnJlYWQiXSwiY2hpbGRyZW4iOltdfSx7ImlkIjoiY21vNWgxams2MDAwNzQyb2ExNWdkeDQycyIsImxhYmVsIjoiQUkgUHJlLUNvbnN1bHRhdGlvbiIsInNsdWciOiJhaS1wcmUtY29uc3VsdGF0aW9uIiwiaWNvbiI6ImNsaXBib2FyZC1saXN0IiwiaHJlZiI6Ii9iZXpzL3RlbGVtZWRpY2luZS9wYXRpZW50L2ludGFrZSIsInR5cGUiOiJJVEVNIiwicGVybWlzc2lvbktleXMiOlsiYWktcHJlLWNvbnN1bHRhdGlvbjpyZWFkIl0sImNoaWxkcmVuIjpbXX0seyJpZCI6ImNtbzVoMWprcTAwMDg0Mm9hYnFlODZ3aWYiLCJsYWJlbCI6IkFJIENvbnN1bHRhdGlvbiIsInNsdWciOiJhaS1jb25zdWx0YXRpb24iLCJpY29uIjoic3RldGhvc2NvcGUiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvY29uc3VsdGF0aW9uIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJhaS1jb25zdWx0YXRpb246cmVhZCJdLCJjaGlsZHJlbiI6W119XX1dfV0sInBlcm1pc3Npb25zIjpbImRhc2hib2FyZDpyZWFkIiwicHJvZmlsZTpyZWFkIiwicGF0aWVudC1hcHBvaW50bWVudDpyZWFkIiwiYm9vay1hcHBvaW50bWVudDpyZWFkIiwiYXBwb2ludG1lbnQtaW50YWtlOnJlYWQiLCJhaS1wcmUtY29uc3VsdGF0aW9uOnJlYWQiLCJhaS1jb25zdWx0YXRpb246cmVhZCIsInBhdGllbnQ6Y3JlYXRlIiwicGF0aWVudDpyZWFkIiwicGF0aWVudDp1cGRhdGUiLCJwYXRpZW50OmRlbGV0ZSIsImFwcG9pbnRtZW50OmNyZWF0ZSIsImFwcG9pbnRtZW50OnJlYWQiLCJhcHBvaW50bWVudDp1cGRhdGUiLCJhcHBvaW50bWVudDpkZWxldGUiLCJlbmNvdW50ZXI6Y3JlYXRlIiwiZW5jb3VudGVyOnJlYWQiLCJlbmNvdW50ZXI6dXBkYXRlIiwiZW5jb3VudGVyOmRlbGV0ZSIsInF1ZXN0aW9ubmFpcmVfcmVzcG9uc2U6Y3JlYXRlIiwicXVlc3Rpb25uYWlyZV9yZXNwb25zZTpyZWFkIiwicXVlc3Rpb25uYWlyZV9yZXNwb25zZTp1cGRhdGUiLCJxdWVzdGlvbm5haXJlX3Jlc3BvbnNlOmRlbGV0ZSIsImNvbnN1bHRhZ2VudDpjaGF0IiwiYWdlbnQ6Y2hhdCIsInRleHR0b3NxbGFnZW50OmNoYXQiLCJwaGlhYWdlbnQ6YW5hbHl6ZSJdLCJvcmdhbml6YXRpb25zIjpbeyJpZCI6IjU0YzIxNGQwLTZhN2ItNGRkMS04MmI2LTliNzAzNjg4MjdmOCIsIm5hbWUiOiJkcmdvZGx5Iiwic2x1ZyI6ImRyZ29kbHkiLCJsb2dvIjpudWxsfV0sImFjdGl2ZU9yZ2FuaXphdGlvblJvbGVzIjpbInBhdGllbnQiXSwiYWN0aXZlUm9sZUlkIjoiNTU0MmU0ZmItYmYyZC00Y2U0LTkyZmYtYmNiY2I5OGNmZTc1IiwiYWN0aXZlUm9sZSI6InBhdGllbnQiLCJhY3RpdmVSb2xlUmVkaXJlY3RVcmwiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudCIsInN1YiI6InVEdEoyMk9RcDFPeHBHTERoaTF2bEJ3YTFoc0FndUxZIiwiZXhwIjoxNzc3MDM5NTk3LCJpc3MiOiJodHRwczovL2lhbS5kcmdvZGx5LmNvbSIsImF1ZCI6Imh0dHBzOi8vaWFtLmRyZ29kbHkuY29tIn0.N194Hkg_Jpx2KGq_BQIUEAnuMNoAhzST3C1kp8FE9_nNv7CgPeEychGgA4UxS9ze9IbGyEp11q925pnaYCPoBA"; // 🔥 IMPORTANT
+
+    ws = new WebSocket(`ws://localhost:8000/audio?token=${token}`);
+
+    ws.onopen = () => {
+        console.log("✅ Connected");
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "final") {
+            console.log("🧾:", data.text);
+        }
+
+        if (data.type === "error") {
+            console.error("❌:", data.message);
+        }
+    };
+
+    ws.onerror = (err) => {
+        console.error("WebSocket error:", err);
+    };
+
+    ws.onclose = () => {
+        console.log("🔌 Disconnected");
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(stream);
+
+    // ⚡ Smaller buffer = lower latency
+    processor = audioContext.createScriptProcessor(512, 1, 1);
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    processor.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const input = e.inputBuffer.getChannelData(0);
+
+        const buffer = new Int16Array(input.length);
+
+        for (let i = 0; i < input.length; i++) {
+            buffer[i] = Math.max(-1, Math.min(1, input[i])) * 32767;
+        }
+
+        ws.send(buffer.buffer);
+    };
+}
+
+function stop() {
+    if (processor) processor.disconnect();
+    if (audioContext) audioContext.close();
+    if (ws) ws.close();
+
+    console.log("🛑 Stopped");
+}
+</script>
+
+</body>
+</html>

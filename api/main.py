@@ -12,7 +12,8 @@ from config.config import Config
 from api.routers.agent import router as agent_router
 from api.wsrouters.webs2s import router as websocket_router
 from fastapi.middleware.cors import CORSMiddleware
-
+import asyncio
+import time
 from api.auth import decode_token
 
 logging.basicConfig(
@@ -48,6 +49,33 @@ async def lifespan(app: FastAPI):
         # app.state.pending_approvals = agent.session.pending_approvals
         logger.info("Agent initialized and Tools linked successfully")
         # logger.info(f"Approval policy: {config.approval}")
+        # BACKGROUND CLEANUP TASK
+        async def cleanup_sessions():
+            while True:
+                await asyncio.sleep(60)  # run every 1 minute
+
+                now = time.time()
+                sessions = app.state.sessions
+
+                to_delete = []
+
+                for uid, sess in sessions.items():
+                    if not hasattr(sess, "last_activity"):
+                        continue
+
+                    if now - sess.last_activity > 300:  # 5 min idle
+                        print(f"🧹 Cleaning session: {uid}")
+                        
+                        if sess.client:
+                            await sess.client.close()
+
+                        to_delete.append(uid)
+
+                for uid in to_delete:
+                    del sessions[uid]
+
+        # start background task
+        asyncio.create_task(cleanup_sessions())
         
     except Exception as e:
         logger.error(f"Critical Failure during Agent Startup: {e}")
@@ -79,41 +107,7 @@ def create_app():
         allow_headers=["*"],
     )
     
-    # # Add permission dependency to all routes
-    # @app.middleware("http")
-    # async def auth_middleware(request: Request, call_next):
-
-    #     public_paths = ["/docs", "/openapi.json"]
-
-    #     if request.url.path.startswith(tuple(public_paths)):
-    #         return await call_next(request)
-
-    #     auth_header = request.headers.get("Authorization")
-
-        
-    #     if not auth_header or not auth_header.startswith("Bearer "):
-    #         return JSONResponse(
-    #             status_code=401,
-    #             content={"detail": "Missing authentication token"}
-    #         )
-
-    #     token = auth_header.split(" ")[1]
-
-    #     try:
-    #         user = decode_token(token)
-    #         request.state.user = user
-    #         request.state.token = token
-
-    #     except Exception as e:
-    #         print("JWT ERROR:", str(e))
-    #         return JSONResponse(
-    #             status_code=401,
-    #             content={"detail": "Invalid or expired token"}
-    #         )
-
-    #     response = await call_next(request)
-    #     return response
-
+  
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
 

@@ -1,9 +1,10 @@
 
 import requests
+import base64
 
 class HuggingFaceSTTProvider:
 
-    def __init__(self, api_key: str, model: str = "openai/whisper-large-v3", endpoint_url: str | None = None, debug=False):
+    def __init__(self, api_key: str, model: str =  "openai/whisper-large-v3", endpoint_url: str | None = None, debug=False):
         self.api_key = api_key
         self.model = model
         self.debug = debug
@@ -28,6 +29,16 @@ class HuggingFaceSTTProvider:
         if self.debug:
             print(f"[HF STT] Model={self.model} Bytes={len(audio_bytes)}")
 
+        # encode audio
+        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+
+        payload = {
+            "inputs": audio_base64,
+            "parameters": {
+                "task": "transcribe",
+                "language": "en"   # FORCE LANGUAGE HERE
+            }
+        }
         try:
             response = requests.post(
                 self.url,
@@ -60,7 +71,12 @@ class HuggingFaceSTTProvider:
 
         text = result.get("text", "") if isinstance(result, dict) else ""
 
-        return text.strip()
+        text = text.strip()
+
+        if len(text) < 2:
+            return ""
+
+        return text
     
     def transcribe_chunk(self, audio_bytes: bytes) -> str:
         return self.transcribe(audio_bytes)

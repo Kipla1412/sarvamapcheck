@@ -173,7 +173,7 @@ class Config(BaseModel):
     @property
     def stt_engine(self):
 
-        if not hasattr(self, "_stt_engine"):
+        if not hasattr(self, "_stt_engine") or self._stt_engine is None:
 
             provider = create_stt_provider(
                 self.stt_provider,
@@ -182,7 +182,9 @@ class Config(BaseModel):
                     else self.openai_api_key
                 ),
                 model=self.stt_model,
-                endpoint_url=self.stt_endpoint
+                endpoint_url=self.stt_endpoint,
+                language=self.stt_language,
+                debug=self.debug
             )
 
             processor = AudioProcessor(target_rate=self.stt_sample_rate)
@@ -214,7 +216,11 @@ class Config(BaseModel):
     @property
     def stt_sample_rate(self) -> int:
         return int(os.environ.get("STT_SAMPLE_RATE", "16000"))
-
+    
+    @property
+    def stt_language(self) -> str:
+        return os.environ.get("STT_LANGUAGE", "en")
+    
     # TTS CONFIG
 # --------------------------------------------------
 

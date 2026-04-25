@@ -27,8 +27,10 @@ class OpenAISTTProvider:
 
         data = {
             "model": self.model,
-            "language": "en"  # Force English-only transcription
+            "language": "en",  # Force English-only transcription
+            "temperature": 0
         }
+
 
         try:
             response = requests.post(
