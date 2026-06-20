@@ -171,16 +171,44 @@ class Config(BaseModel):
         return os.environ.get("VAD_ENABLED", "true") == "true"
     
     @property
+    def sarvam_api_key(self):
+        return os.environ.get("SARVAM_API_KEY")
+    
+    @property
+    def sarvam_stt_model(self):
+        return os.environ.get(
+            "SARVAM_STT_MODEL",
+            "saaras:v3"
+        )
+
+    @property
+    def sarvam_tts_model(self):
+        return os.environ.get(
+            "SARVAM_TTS_MODEL",
+            "bulbul:v3"
+        )
+
+    @property
+    def sarvam_speaker(self):
+        return os.environ.get(
+            "SARVAM_SPEAKER",
+            "neha"
+        )
+
+    @property
     def stt_engine(self):
 
         if not hasattr(self, "_stt_engine") or self._stt_engine is None:
 
+            api_key = self.openai_api_key
+            if self.stt_provider == "huggingface":
+                api_key = self.hf_api_key
+            elif self.stt_provider == "sarvam":
+                api_key = self.sarvam_api_key
+
             provider = create_stt_provider(
                 self.stt_provider,
-                api_key=(
-                    self.hf_api_key if self.stt_provider == "huggingface"
-                    else self.openai_api_key
-                ),
+                api_key=api_key,
                 model=self.stt_model,
                 endpoint_url=self.stt_endpoint,
                 language=self.stt_language,
@@ -253,18 +281,31 @@ class Config(BaseModel):
         return os.environ.get("GROQ_API_KEY")
 
     @property
+    def tts_language(self):
+        return os.environ.get("TTS_LANGUAGE", "en-IN")
+
+    @property
+    def tts_speaker(self):
+        return os.environ.get("TTS_SPEAKER", "anushka")
+
+    @property
     def tts_engine(self):
 
         if not hasattr(self, "_tts_engine"):
 
+            api_key = self.openai_api_key
+            if self.tts_provider == "groq":
+                api_key = self.groq_api_key
+            elif self.tts_provider == "sarvam":
+                api_key = self.sarvam_api_key
+
             provider = create_tts_provider(
                 self.tts_provider,
-                api_key=(
-                    self.groq_api_key if self.tts_provider == "groq"
-                    else self.openai_api_key
-                ),
+                api_key=api_key,
                 model=self.tts_model,
-                endpoint_url=self.tts_endpoint
+                endpoint_url=self.tts_endpoint,
+                language=self.tts_language,
+                speaker=self.tts_speaker,
             )
 
             processor = AudioProcessor(target_rate=self.tts_sample_rate)

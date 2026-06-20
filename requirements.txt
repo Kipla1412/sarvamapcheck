@@ -16,3 +16,4 @@ pydantic
 requests
 soundfile
 httpx
+sarvamai

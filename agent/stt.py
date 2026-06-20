@@ -1,4 +1,6 @@
 import asyncio
+import tempfile
+import os
 import numpy as np
 import time
 
@@ -35,10 +37,7 @@ class SpeechToTextAgent:
             # Transcribe
             start = time.time()
 
-            text = await asyncio.to_thread(
-                self.engine.provider.transcribe,
-                wav_bytes
-            )
+            text = await self._transcribe(wav_bytes)
 
             print(f"STT time: {time.time() - start:.2f}s")
 
@@ -51,3 +50,16 @@ class SpeechToTextAgent:
         except Exception as e:
             print("STT Error:", e)
             return ""
+
+    async def _transcribe(self, wav_bytes: bytes) -> str:
+        provider = self.engine.provider
+        if asyncio.iscoroutinefunction(provider.transcribe):
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                f.write(wav_bytes)
+                tmp_path = f.name
+            try:
+                return await provider.transcribe(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+        else:
+            return await asyncio.to_thread(provider.transcribe, wav_bytes)

@@ -1,110 +1,418 @@
-<!-- <!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
-    <title>Healthcare Voice Intake Agent</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Agent</title>
 
     <style>
-        body {
+        * {
             margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
             background: #0f172a;
             color: white;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
+            align-items: center;
         }
 
         .container {
-            width: 700px;
-            margin-top: 40px;
+            width: 900px;
+            max-width: 95%;
         }
 
-        .header {
+        .card {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 20px;
+        }
+
+        h1 {
             text-align: center;
+            margin-bottom: 20px;
         }
 
         .status {
-            margin-top: 10px;
-            font-size: 14px;
-        }
-
-        .connected {
-            color: #22c55e;
-        }
-
-        .disconnected {
-            color: #ef4444;
-        }
-
-        .chat {
-            margin-top: 30px;
-            height: 350px;
-            overflow-y: auto;
-            background: #1e293b;
-            border-radius: 10px;
-            padding: 20px;
-        }
-
-        .message {
-            margin-bottom: 15px;
-        }
-
-        .user {
-            text-align: right;
-        }
-
-        .user span {
-            background: #2563eb;
-            padding: 10px 14px;
-            border-radius: 12px;
-        }
-
-        .ai span {
-            background: #334155;
-            padding: 10px 14px;
-            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: bold;
         }
 
         .controls {
-            margin-top: 30px;
-            text-align: center;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
         }
 
         button {
-            width: 120px;
-            height: 120px;
-            border-radius: 60px;
             border: none;
-            background: #6366f1;
-            color: white;
-            font-size: 16px;
+            padding: 12px 25px;
+            border-radius: 10px;
             cursor: pointer;
-            transition: 0.2s;
+            font-size: 16px;
         }
 
-        button.listening {
+        .start {
+            background: #22c55e;
+            color: white;
+        }
+
+        .stop {
+            background: #ef4444;
+            color: white;
+        }
+
+        .box {
+            background: #334155;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .box h3 {
+            margin-bottom: 10px;
+        }
+
+        .content {
+            min-height: 80px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        .mic {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 20px auto;
+            background: #475569;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 50px;
+        }
+
+        .recording {
             background: #ef4444;
             animation: pulse 1s infinite;
         }
 
         @keyframes pulse {
             0% {
-                transform: scale(1)
+                transform: scale(1);
             }
 
             50% {
-                transform: scale(1.1)
+                transform: scale(1.1);
             }
 
             100% {
-                transform: scale(1)
+                transform: scale(1);
             }
         }
+    </style>
+</head>
 
-        .loader {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #94a3b8;
+<body>
+
+    <div class="container">
+        <div class="card">
+            <h1>🎤 AI Voice Agent</h1>
+
+            <div class="status">
+                Status: <span id="status">Disconnected</span>
+            </div>
+
+            <div class="mic" id="mic">🎙️</div>
+
+            <div class="controls">
+                <button class="start" onclick="startVoice()">Start</button>
+                <button class="stop" onclick="stopVoice()">Stop</button>
+            </div>
+
+            <div class="box">
+                <h3>User Transcript</h3>
+                <div id="transcript" class="content"></div>
+            </div>
+
+            <div class="box">
+                <h3>Assistant Response</h3>
+                <div id="assistant" class="content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let audioContext = null;
+        let processor = null;
+        let source = null;
+        let mediaStream = null;
+
+        let audioQueue = [];
+        let isPlaying = false;
+
+        const statusEl = document.getElementById("status");
+        const transcriptEl = document.getElementById("transcript");
+        const assistantEl = document.getElementById("assistant");
+        const micEl = document.getElementById("mic");
+
+        async function startVoice() {
+            if (ws) return;
+
+            assistantEl.innerHTML = "";
+            transcriptEl.innerHTML = "";
+            audioQueue = [];
+            isPlaying = false;
+
+            // Using your active session generation token
+            const token = "eyJhbGciOiJFZERTQSIsImtpZCI6InZlcnlNMnFSTFRRMWlFSWp4ajdiVE9Sejg2VFdJSUhVIn0.eyJpYXQiOjE3ODE5MzY5ODUsIm5hbWUiOiJQYXRpZW50MSIsImVtYWlsIjoicGF0aWVudDFAZ21haWwuY29tIiwiZW1haWxWZXJpZmllZCI6ZmFsc2UsImltYWdlIjpudWxsLCJjcmVhdGVkQXQiOiIyMDI2LTA1LTA3VDEzOjI5OjEwLjI5MloiLCJ1cGRhdGVkQXQiOiIyMDI2LTA1LTA3VDEzOjI5OjEwLjI5MloiLCJ1c2VybmFtZSI6InBhdGllbnQxIiwiZGlzcGxheVVzZXJuYW1lIjoicGF0aWVudDEiLCJ0d29GYWN0b3JFbmFibGVkIjpmYWxzZSwicm9sZSI6Imd1ZXN0IiwiYmFubmVkIjpmYWxzZSwiYmFuUmVhc29uIjpudWxsLCJiYW5FeHBpcmVzIjpudWxsLCJpZCI6InpEUVpmS2pWZXNoMTVpOFlYeTlFV21VWlU0OXdxZHQ2IiwiYWN0aXZlT3JnYW5pemF0aW9uSWQiOiIwZmI0MWU1MC04MmE0LTQ2MWUtOTZjNy1iZDExMzU5ZDg5MmQiLCJhY3RpdmVUZWFtSWQiOm51bGwsImFwcHMiOlt7ImlkIjoiY21vdmZkMXFwMDAwMDQ1dDc3ZXJoMjhkNiIsIm5hbWUiOiJUZWxlbWVkaWNpbmUiLCJzbHVnIjoidGVsZW1lZGljaW5lIiwibWVudXMiOlt7ImlkIjoiY21vdmZkMXU3MDAwMTQ1dDdyM3VhMDRzdyIsImxhYmVsIjoiUEFUSUVOVCIsInNsdWciOiJwYXRpZW50IiwiaWNvbiI6bnVsbCwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW92ZmQxdmIwMDAyNDV0N216NTk3Z3NqIiwibGFiZWwiOiJEYXNoYm9hcmQiLCJzbHVnIjoicGF0aWVudC1kYXNoYm9hcmQiLCJpY29uIjoibGF5b3V0LWRhc2hib2FyZCIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudCIsInR5cGUiOiJJVEVNIiwicGVybWlzc2lvbktleXMiOlsicGF0aWVudC1kYXNoYm9hcmQ6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQxdm8wMDAzNDV0N3U4YmdnMHVtIiwibGFiZWwiOiJQcm9maWxlIiwic2x1ZyI6InBhdGllbnQtcHJvZmlsZSIsImljb24iOiJ1c2VyLWNvZyIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudC9wcm9maWxlIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LXByb2ZpbGU6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQxd2YwMDA0NDV0N2twZTIzOHFjIiwibGFiZWwiOiJBcHBvaW50bWVudHMiLCJzbHVnIjoicGF0aWVudC1hcHBvaW50bWVudHMtZ3JvdXAiLCJpY29uIjoiY2FsZW5kYXIiLCJocmVmIjpudWxsLCJ0eXBlIjoiR1JPVVAiLCJwZXJtaXNzaW9uS2V5cyI6W10sImNoaWxkcmVuIjpbeyJpZCI6ImNtb3ZmZDF3dzAwMDU0NXQ3Nm1nMTJzM2giLCJsYWJlbCI6IkFsbCBBcHBvaW50bWVudHMiLCJzbHVnIjoicGF0aWVudC1hcHBvaW50bWVudHMiLCJpY29uIjoiY2FsZW5kYXItY2xvY2siLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LWFwcG9pbnRtZW50czpyZWFkIl0sImNoaWxkcmVuIjpbXX0seyJpZCI6ImNtb3ZmZDF4aDAwMDY0NXQ3emhraWI0Y20iLCJsYWJlbCI6IkJvb2sgQXBwb2ludG1lbnQiLCJzbHVnIjoicGF0aWVudC1ib29rLWFwcG9pbnRtZW50IiwiaWNvbiI6ImNhbGVuZGFyLXBsdXMiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzL2Jvb2siLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtYm9vay1hcHBvaW50bWVudDpyZWFkIl0sImNoaWxkcmVuIjpbXX1dfSx7ImlkIjoiY21vdmZkMXh3MDAwNzQ1dDdvMzF2ZmF0bSIsImxhYmVsIjoiQUkgSW50YWtlIiwic2x1ZyI6InBhdGllbnQtYWktaW50YWtlLWdyb3VwIiwiaWNvbiI6ImNsaXBib2FyZC1saXN0IiwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW92ZmQxeWYwMDA4NDV0N2Z1NGNnNmNqIiwibGFiZWwiOiJWb2ljZSBJbnRha2UiLCJzbHVnIjoicGF0aWVudC1pbnRha2Utdm9pY2UiLCJpY29uIjoibWljIiwiaHJlZiI6Ii9iZXpzL3RlbGVtZWRpY2luZS9wYXRpZW50L2FwcG9pbnRtZW50cy9pbnRha2UiLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtaW50YWtlLXZvaWNlOnJlYWQiXSwiY2hpbGRyZW4iOltdfSx7ImlkIjoiY21vdmZkMXl1MDAwOTQ1dDc1eTNjYjhjZyIsImxhYmVsIjoiQ2hhdCBJbnRha2UiLCJzbHVnIjoicGF0aWVudC1pbnRha2UtY2hhdCIsImljb24iOiJtZXNzYWdlLXNxdWFyZSIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudC9pbnRha2UiLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtaW50YWtlLWNoYXQ6cmVhZCJdLCJjaGlsZHJlbiI6W119XX0seyJpZCI6ImNtb3ZmZDF6YjAwMGE0NXQ3c2V4OWdvMXkiLCJsYWJlbCI6IkFJIENvbnN1bHRhdGlvbiIsInNsdWciOiJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi1ncm91cCIsImljb24iOiJzdGV0aG9zY29wZSIsImhyZWYiOm51bGwsInR5cGUiOiJHUk9VUCIsInBlcm1pc3Npb25LZXlzIjpbXSwiY2hpbGRyZW4iOlt7ImlkIjoiY21vdmZkMXp0MDAwYjQ1dDcwZTNzYTV6bSIsImxhYmVsIjoiVm9pY2UgQ29uc3VsdGF0aW9uIiwic2x1ZyI6InBhdGllbnQtYWktY29uc3VsdGF0aW9uLXZvaWNlIiwiaWNvbiI6InBob25lIiwiaHJlZiI6Ii9iZXpzL3RlbGVtZWRpY2luZS9wYXRpZW50L2NvbnN1bHRhdGlvbi92b2ljZSIsInR5cGUiOiJJVEVNIiwicGVybWlzc2lvbktleXMiOlsicGF0aWVudC1haS1jb25zdWx0YXRpb24tdm9pY2U6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQyMDYwMDBjNDV0Nzg3dGY3b2QxIiwibGFiZWwiOiJDaGF0IENvbnN1bHRhdGlvbiIsInNsdWciOiJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi1jaGF0IiwiaWNvbiI6Im1lc3NhZ2UtY2lyY2xlIiwiaHJlZiI6Ii9iZXpzL3RlbGVtZWRpY2luZS9wYXRpZW50L2NvbnN1bHRhdGlvbi9jaGF0IiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi1jaGF0OnJlYWQiXSwiY2hpbGRyZW4iOltdfV19XX1dfV0sInBlcm1pc3Npb25zIjpbInBhdGllbnQtZGFzaGJvYXJkOnJlYWQiLCJwYXRpZW50LXByb2ZpbGU6cmVhZCIsInBhdGllbnQtYXBwb2ludG1lbnRzOnJlYWQiLCJwYXRpZW50LWJvb2stYXBwb2ludG1lbnQ6cmVhZCIsInBhdGllbnQtaW50YWtlLXZvaWNlOnJlYWQiLCJwYXRpZW50LWludGFrZS1jaGF0OnJlYWQiLCJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi12b2ljZTpyZWFkIiwicGF0aWVudC1haS1jb25zdWx0YXRpb24tY2hhdDpyZWFkIiwicGF0aWVudDpjcmVhdGUiLCJwYXRpZW50OnJlYWQiLCJwYXRpZW50OnVwZGF0ZSIsInBhdGllbnQ6ZGVsZXRlIiwiYXBwb2ludG1lbnQ6Y3JlYXRlIiwiYXBwb2ludG1lbnQ6cmVhZCIsImFwcG9pbnRtZW50OnVwZGF0ZSIsImFwcG9pbnRtZW50OmRlbGV0ZSIsImVuY291bnRlcjpjcmVhdGUiLCJlbmNvdW50ZXI6cmVhZCIsImVuY291bnRlcjp1cGRhdGUiLCJlbmNvdW50ZXI6ZGVsZXRlIiwicXVlc3Rpb25uYWlyZV9yZXNwb25zZTpjcmVhdGUiLCJxdWVzdGlvbm5haXJlX3Jlc3BvbnNlOnJlYWQiLCJxdWVzdGlvbm5haXJlX3Jlc3BvbnNlOnVwZGF0ZSIsInF1ZXN0aW9ubmFpcmVfcmVzcG9uc2U6ZGVsZXRlIiwiY29uc3VsdGFnZW50OmNoYXQiLCJhZ2VudDpjaGF0IiwiY29uZGl0aW9uOmNyZWF0ZSIsImNvbmRpdGlvbjpkZWxldGUiLCJjb25kaXRpb246cmVhZCIsImNvbmRpdGlvbjp1cGRhdGUiLCJtZWRpY2F0aW9uX3JlcXVlc3Q6Y3JlYXRlIiwibWVkaWNhdGlvbl9yZXF1ZXN0OmRlbGV0ZSIsIm1lZGljYXRpb25fcmVxdWVzdDpyZWFkIiwibWVkaWNhdGlvbl9yZXF1ZXN0OnVwZGF0ZSIsIm9ic2VydmF0aW9uOmNyZWF0ZSIsIm9ic2VydmF0aW9uOmRlbGV0ZSIsIm9ic2VydmF0aW9uOnJlYWQiLCJvYnNlcnZhdGlvbjp1cGRhdGUiLCJvcmc6Y3JlYXRlIiwib3JnOmRlbGV0ZSIsIm9yZzpyZWFkIiwib3JnOnVwZGF0ZSIsInNlcnZpY2VfcmVxdWVzdDpjcmVhdGUiLCJzZXJ2aWNlX3JlcXVlc3Q6ZGVsZXRlIiwic2VydmljZV9yZXF1ZXN0OnJlYWQiLCJzZXJ2aWNlX3JlcXVlc3Q6dXBkYXRlIiwic2xvdDpjcmVhdGUiLCJzbG90OmRlbGV0ZSIsInNsb3Q6cmVhZCIsInNsb3Q6dXBkYXRlIiwidGVybWlub2xvZ3k6cmVhZCIsInByYWN0aXRpb25lcl9yb2xlOmRlbGV0ZSIsInByYWN0aXRpb25lcl9yb2xlOmNyZWF0ZSIsInByYWN0aXRpb25lcl9yb2xlOnVwZGF0ZSIsInByYWN0aXRpb25lcl9yb2xlOnJlYWQiLCJwcmFjdGl0aW9uZXI6Y3JlYXRlIiwicHJhY3RpdGlvbmVyOmRlbGV0ZSIsInByYWN0aXRpb25lcjpyZWFkIiwicHJhY3RpdGlvbmVyOnVwZGF0ZSJdLCJvcmdhbml6YXRpb25zIjpbeyJpZCI6IjBmYjQxZTUwLTgyYTQtNDYxZS05NmM3LWJkMTEzNTlkODkyZCIsIm5hbWUiOiJkcmdvZGx5Iiwic2x1ZyI6ImRyZ29kbHkiLCJsb2dvIjpudWxsfV0sImFjdGl2ZU9yZ2FuaXphdGlvblJvbGVzIjpbInBhdGllbnQiXSwiYWN0aXZlUm9sZUlkIjoiNWNkODU2MjEtOTRjNy00NWY5LWI3NTUtODdjZmUxOTdiYzBkIiwiYWN0aXZlUm9sZSI6InBhdGllbnQiLCJhY3RpdmVSb2xlUmVkaXJlY3RVcmwiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudCIsInN1YiI6InpEUVpmS2pWZXNoMTVpOFlYeTlFV21VWlU0OXdxZHQ2IiwiZXhwIjoxNzgxOTM3ODg1LCJpc3MiOiJodHRwczovL2lhbS5kcmdvZGx5LmNvbSIsImF1ZCI6Imh0dHBzOi8vaWFtLmRyZ29kbHkuY29tIn0.3s78afCyG2u9mVYDF8G0AfAI1e9APBv7e6GB3y_ZVCSeM1glVR8_x6fTzxyEgg9yP2MN6wcnxPdkhu-R6_JODA";
+
+            ws = new WebSocket(`ws://localhost:8000/audio?token=${token}`);
+
+            ws.onopen = async () => {
+                console.log("Connected to server");
+                statusEl.innerText = "Connected";
+                micEl.classList.add("recording");
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new AudioContext({ sampleRate: 16000 });
+
+                source = audioContext.createMediaStreamSource(mediaStream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                processor.onaudioprocess = (event) => {
+                    const input = event.inputBuffer.getChannelData(0);
+                    const pcm = new Int16Array(input.length);
+
+                    for (let i = 0; i < input.length; i++) {
+                        // Clamp the values safely within PCM bounds
+                        let s = Math.max(-1, Math.min(1, input[i]));
+                        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        // 🌟 Send raw structured PCM binary frame
+                        ws.send(pcm.buffer);
+                    }
+                };
+            };
+
+            ws.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === "transcript") {
+                    transcriptEl.innerHTML = data.text;
+                }
+
+                if (data.type === "text_delta") {
+                    assistantEl.innerHTML += data.text;
+                }
+
+                if (data.type === "assistant_text") {
+                    assistantEl.innerHTML = data.text;
+                }
+
+                if (data.type === "audio") {
+                    audioQueue.push(data.audio);
+                    processAudioQueue();
+                }
+
+                if (data.type === "error") {
+                    console.error(data.message);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.log("WebSocket Error: ", error);
+            };
+
+            ws.onclose = () => {
+                console.log("Disconnected from server");
+                stopVoice();
+            };
+        }
+
+        function processAudioQueue() {
+            if (isPlaying || audioQueue.length === 0) return;
+
+            isPlaying = true;
+            const nextAudioBase64 = audioQueue.shift();
+
+            // 🌟 FIX: Updated codec type header to wave/wav to match 24kHz engine settings
+            const audio = new Audio("data:audio/wav;base64," + nextAudioBase64);
+
+            audio.onended = () => {
+                isPlaying = false;
+                processAudioQueue();
+            };
+
+            audio.onerror = (e) => {
+                console.error("Audio block playback failed:", e);
+                isPlaying = false;
+                processAudioQueue();
+            };
+
+            audio.play().catch(err => {
+                console.error("Audio playback failure trigger:", err);
+                isPlaying = false;
+                processAudioQueue();
+            });
+        }
+
+        function stopVoice() {
+            if (processor) processor.disconnect();
+            if (source) source.disconnect();
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (audioContext && audioContext.state !== "closed") {
+                audioContext.close();
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+
+            ws = null;
+            micEl.classList.remove("recording");
+            statusEl.innerText = "Disconnected";
+            audioQueue = [];
+            isPlaying = false;
+        }
+    </script>
+</body>
+
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Agent</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0f172a;
+            color: white;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 900px;
+            max-width: 95%;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        button {
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .start {
+            background: #22c55e;
+            color: white;
+        }
+
+        .stop {
+            background: #ef4444;
+            color: white;
+        }
+
+        .box {
+            background: #334155;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .box h3 {
+            margin-bottom: 10px;
+        }
+
+        .content {
+            min-height: 80px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        .mic {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 20px auto;
+            background: #475569;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 50px;
+        }
+
+        .recording {
+            background: #ef4444;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
         }
     </style>
 </head>
@@ -113,238 +421,305 @@
 
     <div class="container">
 
-        <div class="header">
-            <h1>Healthcare Voice Intake Agent</h1>
-            <div id="status" class="status disconnected">Disconnected</div>
-        </div>
+        <div class="card">
 
-        <div id="chat" class="chat"></div>
+            <h1>🎤 AI Voice Agent</h1>
 
-        <div class="controls">
-            <button id="recordBtn">🎤 Speak</button>
-            <div id="loader" class="loader"></div>
+            <div class="status">
+                Status:
+                <span id="status">
+                    Disconnected
+                </span>
+            </div>
+
+            <div class="mic" id="mic">
+                🎙️
+            </div>
+
+            <div class="controls">
+
+                <button class="start" onclick="startVoice()">
+                    Start
+                </button>
+
+                <button class="stop" onclick="stopVoice()">
+                    Stop
+                </button>
+
+            </div>
+
+            <div class="box">
+
+                <h3>
+                    User Transcript
+                </h3>
+
+                <div id="transcript" class="content"></div>
+
+            </div>
+
+            <div class="box">
+
+                <h3>
+                    Assistant Response
+                </h3>
+
+                <div id="assistant" class="content"></div>
+
+            </div>
+
         </div>
 
     </div>
 
     <script>
 
-        let socket
-        let stream = null
-        let processor = null
-        let source = null
-        let audioContext = null
-        let currentAudio = null
-        let isRecording = false
-        let currentAIMessage = null
-        const chat = document.getElementById("chat")
-        const status = document.getElementById("status")
-        const loader = document.getElementById("loader")
+        let ws = null;
 
-        function addMessage(text, type) {
+        let audioContext = null;
+        let processor = null;
+        let source = null;
+        let mediaStream = null;
 
-            const div = document.createElement("div")
-            div.className = "message " + type
+        const statusEl =
+            document.getElementById("status");
 
-            const span = document.createElement("span")
-            span.innerText = text
+        const transcriptEl =
+            document.getElementById("transcript");
 
-            div.appendChild(span)
-            chat.appendChild(div)
+        const assistantEl =
+            document.getElementById("assistant");
 
-            chat.scrollTop = chat.scrollHeight
+        const micEl =
+            document.getElementById("mic");
 
+
+        async function startVoice() {
+
+            if (ws) {
+                return;
+            }
+
+            assistantEl.innerHTML = "";
+            transcriptEl.innerHTML = "";
+
+            const token =
+                "eyJhbGciOiJFZERTQSIsImtpZCI6InZlcnlNMnFSTFRRMWlFSWp4ajdiVE9Sejg2VFdJSUhVIn0.eyJpYXQiOjE3ODE4NjQ2OTksIm5hbWUiOiJQYXRpZW50MSIsImVtYWlsIjoicGF0aWVudDFAZ21haWwuY29tIiwiZW1haWxWZXJpZmllZCI6ZmFsc2UsImltYWdlIjpudWxsLCJjcmVhdGVkQXQiOiIyMDI2LTA1LTA3VDEzOjI5OjEwLjI5MloiLCJ1cGRhdGVkQXQiOiIyMDI2LTA1LTA3VDEzOjI5OjEwLjI5MloiLCJ1c2VybmFtZSI6InBhdGllbnQxIiwiZGlzcGxheVVzZXJuYW1lIjoicGF0aWVudDEiLCJ0d29GYWN0b3JFbmFibGVkIjpmYWxzZSwicm9sZSI6Imd1ZXN0IiwiYmFubmVkIjpmYWxzZSwiYmFuUmVhc29uIjpudWxsLCJiYW5FeHBpcmVzIjpudWxsLCJpZCI6InpEUVpmS2pWZXNoMTVpOFlYeTlFV21VWlU0OXdxZHQ2IiwiYWN0aXZlT3JnYW5pemF0aW9uSWQiOiIwZmI0MWU1MC04MmE0LTQ2MWUtOTZjNy1iZDExMzU5ZDg5MmQiLCJhY3RpdmVUZWFtSWQiOm51bGwsImFwcHMiOlt7ImlkIjoiY21vdmZkMXFwMDAwMDQ1dDc3ZXJoMjhkNiIsIm5hbWUiOiJUZWxlbWVkaWNpbmUiLCJzbHVnIjoidGVsZW1lZGljaW5lIiwibWVudXMiOlt7ImlkIjoiY21vdmZkMXU3MDAwMTQ1dDdyM3VhMDRzdyIsImxhYmVsIjoiUEFUSUVOVCIsInNsdWciOiJwYXRpZW50IiwiaWNvbiI6bnVsbCwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW92ZmQxdmIwMDAyNDV0N216NTk3Z3NqIiwibGFiZWwiOiJEYXNoYm9hcmQiLCJzbHVnIjoicGF0aWVudC1kYXNoYm9hcmQiLCJpY29uIjoibGF5b3V0LWRhc2hib2FyZCIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudCIsInR5cGUiOiJJVEVNIiwicGVybWlzc2lvbktleXMiOlsicGF0aWVudC1kYXNoYm9hcmQ6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQxdm8wMDAzNDV0N3U4YmdnMHVtIiwibGFiZWwiOiJQcm9maWxlIiwic2x1ZyI6InBhdGllbnQtcHJvZmlsZSIsImljb24iOiJ1c2VyLWNvZyIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudC9wcm9maWxlIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LXByb2ZpbGU6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQxd2YwMDA0NDV0N2twZTIzOHFjIiwibGFiZWwiOiJBcHBvaW50bWVudHMiLCJzbHVnIjoicGF0aWVudC1hcHBvaW50bWVudHMtZ3JvdXAiLCJpY29uIjoiY2FsZW5kYXIiLCJocmVmIjpudWxsLCJ0eXBlIjoiR1JPVVAiLCJwZXJtaXNzaW9uS2V5cyI6W10sImNoaWxkcmVuIjpbeyJpZCI6ImNtb3ZmZDF3dzAwMDU0NXQ3Nm1nMTJzM2giLCJsYWJlbCI6IkFsbCBBcHBvaW50bWVudHMiLCJzbHVnIjoicGF0aWVudC1hcHBvaW50bWVudHMiLCJpY29uIjoiY2FsZW5kYXItY2xvY2siLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LWFwcG9pbnRtZW50czpyZWFkIl0sImNoaWxkcmVuIjpbXX0seyJpZCI6ImNtb3ZmZDF4aDAwMDY0NXQ3emhraWI0Y20iLCJsYWJlbCI6IkJvb2sgQXBwb2ludG1lbnQiLCJzbHVnIjoicGF0aWVudC1ib29rLWFwcG9pbnRtZW50IiwiaWNvbiI6ImNhbGVuZGFyLXBsdXMiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzL2Jvb2siLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtYm9vay1hcHBvaW50bWVudDpyZWFkIl0sImNoaWxkcmVuIjpbXX1dfSx7ImlkIjoiY21vdmZkMXh3MDAwNzQ1dDdvMzF2ZmF0bSIsImxhYmVsIjoiQUkgSW50YWtlIiwic2x1ZyI6InBhdGllbnQtYWktaW50YWtlLWdyb3VwIiwiaWNvbiI6ImNsaXBib2FyZC1saXN0IiwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW92ZmQxeWYwMDA4NDV0N2Z1NGNnNmNqIiwibGFiZWwiOiJWb2ljZSBJbnRha2UiLCJzbHVnIjoicGF0aWVudC1pbnRha2Utdm9pY2UiLCJpY29uIjoibWljIiwiaHJlZiI6Ii9iZXpzL3RlbGVtZWRpY2luZS9wYXRpZW50L2FwcG9pbnRtZW50cy9pbnRha2UiLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtaW50YWtlLXZvaWNlOnJlYWQiXSwiY2hpbGRyZW4iOltdfSx7ImlkIjoiY21vdmZkMXl1MDAwOTQ1dDc1eTNjYjhjZyIsImxhYmVsIjoiQ2hhdCBJbnRha2UiLCJzbHVnIjoicGF0aWVudC1pbnRha2UtY2hhdCIsImljb24iOiJtZXNzYWdlLXNxdWFyZSIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudC9pbnRha2UiLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtaW50YWtlLWNoYXQ6cmVhZCJdLCJjaGlsZHJlbiI6W119XX0seyJpZCI6ImNtb3ZmZDF6YjAwMGE0NXQ3c2V4OWdvMXkiLCJsYWJlbCI6IkFJIENvbnN1bHRhdGlvbiIsInNsdWciOiJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi1ncm91cCIsImljb24iOiJzdGV0aG9zY29wZSIsImhyZWYiOm51bGwsInR5cGUiOiJHUk9VUCIsInBlcm1pc3Npb25LZXlzIjpbXSwiY2hpbGRyZW4iOlt7ImlkIjoiY21vdmZkMXp0MDAwYjQ1dDcwZTNzYTV6bSIsImxhYmVsIjoiVm9pY2UgQ29uc3VsdGF0aW9uIiwic2x1ZyI6InBhdGllbnQtYWktY29uc3VsdGF0aW9uLXZvaWNlIiwiaWNvbiI6InBob25lIiwiaHJlZiI6Ii9iZXpzL3RlbGVtZWRpY2luZS9wYXRpZW50L2NvbnN1bHRhdGlvbi92b2ljZSIsInR5cGUiOiJJVEVNIiwicGVybWlzc2lvbktleXMiOlsicGF0aWVudC1haS1jb25zdWx0YXRpb24tdm9pY2U6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQyMDYwMDBjNDV0Nzg3dGY3b2QxIiwibGFiZWwiOiJDaGF0IENvbnN1bHRhdGlvbiIsInNsdWciOiJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi1jaGF0IiwiaWNvbiI6Im1lc3NhZ2UtY2lyY2xlIiwiaHJlZiI6Ii9iZXpzL3RlbGVtZWRpY2luZS9wYXRpZW50L2NvbnN1bHRhdGlvbi9jaGF0IiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi1jaGF0OnJlYWQiXSwiY2hpbGRyZW4iOltdfV19XX1dfV0sInBlcm1pc3Npb25zIjpbInBhdGllbnQtZGFzaGJvYXJkOnJlYWQiLCJwYXRpZW50LXByb2ZpbGU6cmVhZCIsInBhdGllbnQtYXBwb2ludG1lbnRzOnJlYWQiLCJwYXRpZW50LWJvb2stYXBwb2ludG1lbnQ6cmVhZCIsInBhdGllbnQtaW50YWtlLXZvaWNlOnJlYWQiLCJwYXRpZW50LWludGFrZS1jaGF0OnJlYWQiLCJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi12b2ljZTpyZWFkIiwicGF0aWVudC1haS1jb25zdWx0YXRpb24tY2hhdDpyZWFkIiwicGF0aWVudDpjcmVhdGUiLCJwYXRpZW50OnJlYWQiLCJwYXRpZW50OnVwZGF0ZSIsInBhdGllbnQ6ZGVsZXRlIiwiYXBwb2ludG1lbnQ6Y3JlYXRlIiwiYXBwb2ludG1lbnQ6cmVhZCIsImFwcG9pbnRtZW50OnVwZGF0ZSIsImFwcG9pbnRtZW50OmRlbGV0ZSIsImVuY291bnRlcjpjcmVhdGUiLCJlbmNvdW50ZXI6cmVhZCIsImVuY291bnRlcjp1cGRhdGUiLCJlbmNvdW50ZXI6ZGVsZXRlIiwicXVlc3Rpb25uYWlyZV9yZXNwb25zZTpjcmVhdGUiLCJxdWVzdGlvbm5haXJlX3Jlc3BvbnNlOnJlYWQiLCJxdWVzdGlvbm5haXJlX3Jlc3BvbnNlOnVwZGF0ZSIsInF1ZXN0aW9ubmFpcmVfcmVzcG9uc2U6ZGVsZXRlIiwiY29uc3VsdGFnZW50OmNoYXQiLCJhZ2VudDpjaGF0IiwiY29uZGl0aW9uOmNyZWF0ZSIsImNvbmRpdGlvbjpkZWxldGUiLCJjb25kaXRpb246cmVhZCIsImNvbmRpdGlvbjp1cGRhdGUiLCJtZWRpY2F0aW9uX3JlcXVlc3Q6Y3JlYXRlIiwibWVkaWNhdGlvbl9yZXF1ZXN0OmRlbGV0ZSIsIm1lZGljYXRpb25fcmVxdWVzdDpyZWFkIiwibWVkaWNhdGlvbl9yZXF1ZXN0OnVwZGF0ZSIsIm9ic2VydmF0aW9uOmNyZWF0ZSIsIm9ic2VydmF0aW9uOmRlbGV0ZSIsIm9ic2VydmF0aW9uOnJlYWQiLCJvYnNlcnZhdGlvbjp1cGRhdGUiLCJvcmc6Y3JlYXRlIiwib3JnOmRlbGV0ZSIsIm9yZzpyZWFkIiwib3JnOnVwZGF0ZSIsInNlcnZpY2VfcmVxdWVzdDpjcmVhdGUiLCJzZXJ2aWNlX3JlcXVlc3Q6ZGVsZXRlIiwic2VydmljZV9yZXF1ZXN0OnJlYWQiLCJzZXJ2aWNlX3JlcXVlc3Q6dXBkYXRlIiwic2xvdDpjcmVhdGUiLCJzbG90OmRlbGV0ZSIsInNsb3Q6cmVhZCIsInNsb3Q6dXBkYXRlIiwidGVybWlub2xvZ3k6cmVhZCIsInByYWN0aXRpb25lcl9yb2xlOmRlbGV0ZSIsInByYWN0aXRpb25lcl9yb2xlOmNyZWF0ZSIsInByYWN0aXRpb25lcl9yb2xlOnVwZGF0ZSIsInByYWN0aXRpb25lcl9yb2xlOnJlYWQiLCJwcmFjdGl0aW9uZXI6Y3JlYXRlIiwicHJhY3RpdGlvbmVyOmRlbGV0ZSIsInByYWN0aXRpb25lcjpyZWFkIiwicHJhY3RpdGlvbmVyOnVwZGF0ZSJdLCJvcmdhbml6YXRpb25zIjpbeyJpZCI6IjBmYjQxZTUwLTgyYTQtNDYxZS05NmM3LWJkMTEzNTlkODkyZCIsIm5hbWUiOiJkcmdvZGx5Iiwic2x1ZyI6ImRyZ29kbHkiLCJsb2dvIjpudWxsfV0sImFjdGl2ZU9yZ2FuaXphdGlvblJvbGVzIjpbInBhdGllbnQiXSwiYWN0aXZlUm9sZUlkIjoiNWNkODU2MjEtOTRjNy00NWY5LWI3NTUtODdjZmUxOTdiYzBkIiwiYWN0aXZlUm9sZSI6InBhdGllbnQiLCJhY3RpdmVSb2xlUmVkaXJlY3RVcmwiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudCIsInN1YiI6InpEUVpmS2pWZXNoMTVpOFlYeTlFV21VWlU0OXdxZHQ2IiwiZXhwIjoxNzgxODY1NTk5LCJpc3MiOiJodHRwczovL2lhbS5kcmdvZGx5LmNvbSIsImF1ZCI6Imh0dHBzOi8vaWFtLmRyZ29kbHkuY29tIn0.DQTRt9O9ZPSjLE31Gkytyn7Ivr_jd1l2Vl3iFbbgtNZnM7gNfSyfXHpWs2ahD4nJciR33WK2V2JOX8oO9-J_Bw";
+
+            ws = new WebSocket(
+                `ws://localhost:8000/audio?token=${token}`
+            );
+
+            ws.binaryType = "arraybuffer";
+
+            ws.onopen = async () => {
+
+                console.log(
+                    "Connected"
+                );
+
+                statusEl.innerText =
+                    "Connected";
+
+                micEl.classList.add(
+                    "recording"
+                );
+
+                mediaStream =
+                    await navigator
+                        .mediaDevices
+                        .getUserMedia({
+                            audio: true
+                        });
+
+                audioContext =
+                    new AudioContext({
+                        sampleRate: 16000
+                    });
+
+                source =
+                    audioContext
+                        .createMediaStreamSource(
+                            mediaStream
+                        );
+
+                processor =
+                    audioContext
+                        .createScriptProcessor(
+                            4096,
+                            1,
+                            1
+                        );
+
+                source.connect(
+                    processor
+                );
+
+                processor.connect(
+                    audioContext.destination
+                );
+
+                processor.onaudioprocess =
+                    (event) => {
+
+                        const input =
+                            event.inputBuffer
+                                .getChannelData(0);
+
+                        const pcm =
+                            new Int16Array(
+                                input.length
+                            );
+
+                        for (
+                            let i = 0;
+                            i < input.length;
+                            i++
+                        ) {
+
+                            pcm[i] =
+                                Math.max(
+                                    -1,
+                                    Math.min(
+                                        1,
+                                        input[i]
+                                    )
+                                ) * 32767;
+                        }
+
+                        if (
+                            ws &&
+                            ws.readyState === 1
+                        ) {
+
+                            ws.send(
+                                pcm.buffer
+                            );
+                        }
+                    };
+            };
+
+            ws.onmessage =
+                async (event) => {
+
+                    const data =
+                        JSON.parse(
+                            event.data
+                        );
+
+                    console.log(data);
+
+                    if (
+                        data.type ===
+                        "transcript"
+                    ) {
+
+                        transcriptEl.innerHTML =
+                            data.text;
+                    }
+
+                    if (
+                        data.type ===
+                        "text_delta"
+                    ) {
+
+                        assistantEl.innerHTML +=
+                            data.text;
+                    }
+
+                    if (
+                        data.type ===
+                        "assistant_text"
+                    ) {
+
+                        assistantEl.innerHTML =
+                            data.text;
+                    }
+
+                    if (
+                        data.type ===
+                        "audio"
+                    ) {
+
+                        const audio =
+                            new Audio(
+                                "data:audio/mp3;base64,"
+                                + data.audio
+                            );
+
+                        audio.play();
+                    }
+                    if (data.type === "error") {
+                        console.error(data.message);
+                        alert(data.message);
+                    }
+                };
+
+            ws.onerror =
+                (error) => {
+
+                    console.log(
+                        error
+                    );
+                };
+
+            ws.onclose =
+                () => {
+
+                    console.log(
+                        "Disconnected"
+                    );
+
+                    statusEl.innerText =
+                        "Disconnected";
+
+                    micEl.classList.remove(
+                        "recording"
+                    );
+
+                    ws = null;
+                };
         }
 
-        function connectSocket() {
 
-            // You need to provide a valid JWT token here
-            const token = "eyJhbGciOiJFZERTQSIsImtpZCI6InZ3Q0tiRjJvZXVDRWdUUHY5RTRsSkpGcHdDQmpvanBIIn0.eyJpYXQiOjE3NzU1NjczMTksIm5hbWUiOiJEZW1vIFVzZXIiLCJlbWFpbCI6ImRlbW91c2VyLmduckBnbWFpbC5jb20iLCJlbWFpbFZlcmlmaWVkIjpmYWxzZSwiaW1hZ2UiOm51bGwsImNyZWF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVzZXJuYW1lIjpudWxsLCJkaXNwbGF5VXNlcm5hbWUiOm51bGwsInR3b0ZhY3RvckVuYWJsZWQiOmZhbHNlLCJyb2xlIjoiZ3Vlc3QiLCJiYW5uZWQiOmZhbHNlLCJiYW5SZWFzb24iOm51bGwsImJhbkV4cGlyZXMiOm51bGwsImlkIjoicVZuYTJnTU01cGRVaVpvUGNCcGR6Q0VKRm1PeU5RU1UiLCJhY3RpdmVPcmdhbml6YXRpb25JZCI6IjQ4NzIzYjE3LTQwNmQtNDZlOS1hZmI5LTZlMTdkYzc4OGZkYSIsImFjdGl2ZVRlYW1JZCI6bnVsbCwiYXBwcyI6W10sInBlcm1pc3Npb25zIjpbImFnZW50OmNoYXQiXSwib3JnYW5pemF0aW9ucyI6W3siaWQiOiI0ODcyM2IxNy00MDZkLTQ2ZTktYWZiOS02ZTE3ZGM3ODhmZGEiLCJuYW1lIjoiZHJnb2RseSIsInNsdWciOiJkcmdvZGx5IiwibG9nbyI6bnVsbH1dLCJzdWIiOiJxVm5hMmdNTTVwZFVpWm9QY0JwZHpDRUpGbU95TlFTVSIsImV4cCI6MTc3NTU2ODIxOSwiaXNzIjoiaHR0cHM6Ly9pYW0uZHJnb2RseS5jb20iLCJhdWQiOiJodHRwczovL2lhbS5kcmdvZGx5LmNvbSJ9.gfbshkHh16d6Sy0R2Uvt6Q-zV7rP6m5R-oqmQXlIm18P6B7FfEfGRB5_D664T2ipqN2Yx2xOrGv45al_TAQxBA"
-            socket = new WebSocket(`wss://agents.drgodly.com/ws/chatting?token=${token}`)
-            socket.binaryType = "arraybuffer"
-
-            socket.onopen = () => {
-                status.innerText = "Connected"
-                status.className = "status connected"
-            }
-
-            socket.onclose = () => {
-
-                status.innerText = "Disconnected"
-                status.className = "status disconnected"
-
-                setTimeout(connectSocket, 2000)
-
-            }
-
-            socket.onerror = (e) => {
-                console.error("WebSocket error", e)
-            }
-
-            socket.onmessage = (event) => {
-
-                // AUDIO RESPONSE
-                if (event.data instanceof ArrayBuffer) {
-
-                    const blob = new Blob([event.data], { type: 'audio/wav' })
-
-                    if (currentAudio) {
-                        currentAudio.pause()
-                    }
-
-                    currentAudio = new Audio(URL.createObjectURL(blob))
-                    currentAudio.play().catch(err => {
-                        console.log("Audio play error", err)
-                    })
-
-                    return
-                }
-
-                let data
-
-                try {
-                    data = JSON.parse(event.data)
-                } catch (err) {
-                    console.error("Invalid JSON", event.data)
-                    return
-                }
-
-                // USER TRANSCRIPTION
-                if (data.type === "user_question") {
-
-                    addMessage(data.content, "user")
-
-                    loader.innerText = "AI thinking..."
-
-                    currentAIMessage = null
-                }
-
-                // STREAMING TEXT
-                if (data.type === "text") {
-
-                    loader.innerText = ""
-
-                    if (!currentAIMessage) {
-
-                        currentAIMessage = document.createElement("div")
-                        currentAIMessage.className = "message ai"
-
-                        const span = document.createElement("span")
-                        span.id = "ai-stream"
-
-                        currentAIMessage.appendChild(span)
-                        chat.appendChild(currentAIMessage)
-
-                    }
-
-                    const span = document.getElementById("ai-stream")
-                    span.innerText += data.content
-
-                    chat.scrollTop = chat.scrollHeight
-                }
-
-                // APPROVAL REQUEST
-                if (data.type === "approval_request") {
-
-                    currentApprovalId = data.approval_id
-
-                    approvalText.innerText =
-                        (data.description || "Tool wants approval") +
-                        "\nTool: " + data.tool_name
-
-                    approvalPopup.style.display = "flex"
-
-                }
-
-                // ERROR
-                if (data.type === "error") {
-
-                    loader.innerText = ""
-                    addMessage("Error: " + data.message, "ai")
-
-                }
-
-            }
-
-        }
-
-        connectSocket()
-
-        recordBtn.onmousedown = async () => {
-
-            if (isRecording) return
-
-            try {
-
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-                audioContext = new AudioContext({ sampleRate: 16000 })
-
-                source = audioContext.createMediaStreamSource(stream)
-
-                processor = audioContext.createScriptProcessor(2048, 1, 1)
-
-                source.connect(processor)
-                processor.connect(audioContext.destination)
-
-                isRecording = true
-
-                processor.onaudioprocess = (event) => {
-
-                    if (!isRecording) return
-
-                    const input = event.inputBuffer.getChannelData(0)
-                    const pcm16 = new Int16Array(input.length)
-
-                    for (let i = 0; i < input.length; i++) {
-                        pcm16[i] = Math.max(-1, Math.min(1, input[i])) * 32767
-                    }
-
-                    if (socket.readyState === WebSocket.OPEN) {
-                        socket.send(pcm16.buffer)
-                    }
-
-                }
-
-                recordBtn.classList.add("listening")
-                recordBtn.innerText = "Listening..."
-
-            } catch (err) {
-
-                console.error(err)
-                status.innerText = "Mic permission denied"
-
-            }
-
-        }
-
-        recordBtn.onmouseup = () => {
-
-            isRecording = false
+        function stopVoice() {
 
             if (processor) {
-                processor.disconnect()
-                processor = null
+
+                processor.disconnect();
             }
 
             if (source) {
-                source.disconnect()
-                source = null
+
+                source.disconnect();
             }
 
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop())
-                stream = null
+            if (mediaStream) {
+
+                mediaStream
+                    .getTracks()
+                    .forEach(
+                        track =>
+                            track.stop()
+                    );
             }
 
             if (audioContext) {
-                audioContext.close()
-                audioContext = null
+
+                audioContext.close();
             }
 
-            recordBtn.classList.remove("listening")
-            recordBtn.innerText = "🎤 Speak"
+            if (ws) {
 
+                ws.close();
+            }
+
+            micEl.classList.remove(
+                "recording"
+            );
+
+            statusEl.innerText =
+                "Stopped";
         }
 
     </script>
@@ -352,315 +727,3 @@
 </body>
 
 </html> -->
-<!DOCTYPE html>
-<html>
-<head>
-<title>Healthcare Voice Intake Agent</title>
-
-<style>
-body{
-    margin:0;
-    font-family:Arial, Helvetica, sans-serif;
-    background:#0f172a;
-    color:white;
-    display:flex;
-    justify-content:center;
-}
-
-.container{
-    width:700px;
-    margin-top:40px;
-}
-
-.header{text-align:center;}
-
-.status{margin-top:10px;font-size:14px;}
-
-.connected{color:#22c55e;}
-.disconnected{color:#ef4444;}
-
-.chat{
-    margin-top:30px;
-    height:350px;
-    overflow-y:auto;
-    background:#1e293b;
-    border-radius:10px;
-    padding:20px;
-}
-
-.message{margin-bottom:15px;}
-
-.user{text-align:right;}
-
-.user span{
-    background:#2563eb;
-    padding:10px 14px;
-    border-radius:12px;
-}
-
-.ai span{
-    background:#334155;
-    padding:10px 14px;
-    border-radius:12px;
-}
-
-.controls{
-    margin-top:30px;
-    text-align:center;
-}
-
-button{
-    width:120px;
-    height:120px;
-    border-radius:60px;
-    border:none;
-    background:#6366f1;
-    color:white;
-    font-size:16px;
-    cursor:pointer;
-}
-
-button.listening{
-    background:#ef4444;
-}
-
-.loader{
-    margin-top:10px;
-    font-size:14px;
-    color:#94a3b8;
-}
-</style>
-
-</head>
-
-<body>
-
-<div class="container">
-
-<div class="header">
-<h1>Healthcare Voice Intake Agent</h1>
-<div id="status" class="status disconnected">Disconnected</div>
-</div>
-
-<div id="chat" class="chat"></div>
-
-<div class="controls">
-<button id="recordBtn">🎤 Start</button>
-<div id="loader" class="loader"></div>
-</div>
-
-</div>
-
-<script>
-
-let socket
-let stream=null
-let processor=null
-let source=null
-let audioContext=null
-let isRecording=false
-let currentAudio=null
-let currentAIMessage=null
-
-const chat=document.getElementById("chat")
-const status=document.getElementById("status")
-const loader=document.getElementById("loader")
-const recordBtn=document.getElementById("recordBtn")
-
-function addMessage(text,type){
-
-    const div=document.createElement("div")
-    div.className="message "+type
-
-    const span=document.createElement("span")
-    span.innerText=text
-
-    div.appendChild(span)
-    chat.appendChild(div)
-
-    chat.scrollTop=chat.scrollHeight
-}
-
-function connectSocket(){
-
-const token= "eyJhbGciOiJFZERTQSIsImtpZCI6InZ3Q0tiRjJvZXVDRWdUUHY5RTRsSkpGcHdDQmpvanBIIn0.eyJpYXQiOjE3NzU3NDc0NTgsIm5hbWUiOiJEZW1vIFVzZXIiLCJlbWFpbCI6ImRlbW91c2VyLmduckBnbWFpbC5jb20iLCJlbWFpbFZlcmlmaWVkIjpmYWxzZSwiaW1hZ2UiOm51bGwsImNyZWF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDQtMDJUMTI6NDc6MTcuNjQ4WiIsInVzZXJuYW1lIjpudWxsLCJkaXNwbGF5VXNlcm5hbWUiOm51bGwsInR3b0ZhY3RvckVuYWJsZWQiOmZhbHNlLCJyb2xlIjoiZ3Vlc3QiLCJiYW5uZWQiOmZhbHNlLCJiYW5SZWFzb24iOm51bGwsImJhbkV4cGlyZXMiOm51bGwsImlkIjoicVZuYTJnTU01cGRVaVpvUGNCcGR6Q0VKRm1PeU5RU1UiLCJhY3RpdmVPcmdhbml6YXRpb25JZCI6IjQ4NzIzYjE3LTQwNmQtNDZlOS1hZmI5LTZlMTdkYzc4OGZkYSIsImFjdGl2ZVRlYW1JZCI6bnVsbCwiYXBwcyI6W10sInBlcm1pc3Npb25zIjpbImFnZW50OmNoYXQiXSwib3JnYW5pemF0aW9ucyI6W3siaWQiOiI0ODcyM2IxNy00MDZkLTQ2ZTktYWZiOS02ZTE3ZGM3ODhmZGEiLCJuYW1lIjoiZHJnb2RseSIsInNsdWciOiJkcmdvZGx5IiwibG9nbyI6bnVsbH1dLCJzdWIiOiJxVm5hMmdNTTVwZFVpWm9QY0JwZHpDRUpGbU95TlFTVSIsImV4cCI6MTc3NTc0ODM1OCwiaXNzIjoiaHR0cHM6Ly9pYW0uZHJnb2RseS5jb20iLCJhdWQiOiJodHRwczovL2lhbS5kcmdvZGx5LmNvbSJ9.j-Y2nJZnLMMJLYyMplPdo4FfIa9Amii9L2UqsMz3M6ngLPQn484ghwjvK8KnirN72NI9Lp6ihJtsrYMW1zfDAQ"
-
-socket=new WebSocket(`ws://127.0.0.1:8000/ws/chatting?token=${token}`)
-socket.binaryType="arraybuffer"
-
-socket.onopen=()=>{
-    status.innerText="Connected"
-    status.className="status connected"
-}
-
-socket.onclose=()=>{
-    status.innerText="Disconnected"
-    status.className="status disconnected"
-    setTimeout(connectSocket,2000)
-}
-
-socket.onerror=(e)=>{
-    console.log("WebSocket error",e)
-}
-
-socket.onmessage=(event)=>{
-
-    if(event.data instanceof ArrayBuffer){
-
-        const blob=new Blob([event.data],{type:"audio/wav"})
-
-        if(currentAudio){
-            currentAudio.pause()
-        }
-
-        currentAudio=new Audio(URL.createObjectURL(blob))
-        currentAudio.play()
-
-        return
-    }
-
-    let data=JSON.parse(event.data)
-
-    if(data.type==="user_question"){
-
-        addMessage(data.content,"user")
-
-        loader.innerText="AI thinking..."
-        currentAIMessage=null
-    }
-
-    if(data.type==="text"){
-
-        loader.innerText=""
-
-        // Play immediate feedback sound when text starts
-        const feedbackAudio=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=")
-        feedbackAudio.play().catch(e=>console.log("Feedback play error:",e))
-
-        if(!currentAIMessage){
-
-            currentAIMessage=document.createElement("div")
-            currentAIMessage.className="message ai"
-
-            const span=document.createElement("span")
-            span.id="ai-stream"
-
-            currentAIMessage.appendChild(span)
-            chat.appendChild(currentAIMessage)
-        }
-
-        const span=document.getElementById("ai-stream")
-        span.innerText+=data.content
-
-        chat.scrollTop=chat.scrollHeight
-    }
-
-    if(data.type==="error"){
-        loader.innerText=""
-        addMessage("Error: "+data.message,"ai")
-    }
-
-}
-
-}
-
-connectSocket()
-
-async function startRecording(){
-
-    stream=await navigator.mediaDevices.getUserMedia({
-        audio:{
-            echoCancellation:true,
-            noiseSuppression:true,
-            autoGainControl:true
-        }
-    })
-
-    audioContext=new AudioContext({sampleRate:16000})
-
-    console.log("Sample rate:",audioContext.sampleRate)
-
-    source=audioContext.createMediaStreamSource(stream)
-
-    processor=audioContext.createScriptProcessor(1024,1,1)
-
-    source.connect(processor)
-    processor.connect(audioContext.destination)
-
-    processor.onaudioprocess=(event)=>{
-
-        if(!isRecording) return
-
-        const input=event.inputBuffer.getChannelData(0)
-
-        const pcm16=new Int16Array(input.length)
-
-        for(let i=0;i<input.length;i++){
-            pcm16[i]=Math.max(-1,Math.min(1,input[i]))*32767
-        }
-
-        if(socket.readyState===WebSocket.OPEN){
-            socket.send(pcm16.buffer)
-        }
-    }
-
-}
-
-function stopRecording(){
-
-    if(processor){
-        processor.disconnect()
-        processor=null
-    }
-
-    if(source){
-        source.disconnect()
-        source=null
-    }
-
-    if(stream){
-        stream.getTracks().forEach(track=>track.stop())
-        stream=null
-    }
-
-    if(audioContext){
-        audioContext.close()
-        audioContext=null
-    }
-
-}
-
-// Start continuous recording when page loads
-window.onload=async()=>{
-    await startRecording()
-    isRecording=true
-    recordBtn.classList.add("listening")
-    recordBtn.innerText="Listening..."
-}
-
-recordBtn.onclick=async()=>{
-
-    if(!isRecording){
-
-        await startRecording()
-
-        isRecording=true
-        recordBtn.classList.add("listening")
-        recordBtn.innerText="Listening..."
-
-    }else{
-
-        stopRecording()
-
-        isRecording=false
-        recordBtn.classList.remove("listening")
-        recordBtn.innerText="Start"
-
-    }
-
-}
-
-</script>
-
-</body>
-</html>

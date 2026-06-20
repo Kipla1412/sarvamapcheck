@@ -1,4 +1,6 @@
 import asyncio
+import tempfile
+import os
 
 class StreamTranscriber:
 
@@ -13,10 +15,7 @@ class StreamTranscriber:
         audio_bytes = self.engine.prepare_audio(chunk, rate)
 
         try:
-            text = await asyncio.to_thread(
-                self.engine.provider.transcribe,
-                audio_bytes
-            )
+            text = await self._transcribe(audio_bytes)
         except Exception as e:
             print("STT error:", e)
             return None
@@ -39,3 +38,16 @@ class StreamTranscriber:
             return final_text
 
         return None
+
+    async def _transcribe(self, wav_bytes: bytes) -> str:
+        provider = self.engine.provider
+        if asyncio.iscoroutinefunction(provider.transcribe):
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                f.write(wav_bytes)
+                tmp_path = f.name
+            try:
+                return await provider.transcribe(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+        else:
+            return await asyncio.to_thread(provider.transcribe, wav_bytes)
