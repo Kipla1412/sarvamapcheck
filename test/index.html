@@ -148,8 +148,177 @@
             </div>
         </div>
     </div>
-
     <script>
+        let ws = null;
+        let audioContext = null;
+        let processor = null;
+        let source = null;
+        let mediaStream = null;
+
+        // 🌟 New streaming audio engine variables
+        let playbackContext = null;
+        let nextStartTime = 0;
+
+        const statusEl = document.getElementById("status");
+        const transcriptEl = document.getElementById("transcript");
+        const assistantEl = document.getElementById("assistant");
+        const micEl = document.getElementById("mic");
+
+        async function startVoice() {
+            if (ws) return;
+
+            assistantEl.innerHTML = "";
+            transcriptEl.innerHTML = "";
+            nextStartTime = 0;
+
+            // Create playback context for incoming audio stream
+            playbackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+
+            const token = "eyJhbGciOiJFZERTQSIsImtpZCI6InZlcnlNMnFSTFRRMWlFSWp4ajdiVE9Sejg2VFdJSUhVIn0.eyJpYXQiOjE3ODE5MzkyMjQsIm5hbWUiOiJQYXRpZW50MSIsImVtYWlsIjoicGF0aWVudDFAZ21haWwuY29tIiwiZW1haWxWZXJpZmllZCI6ZmFsc2UsImltYWdlIjpudWxsLCJjcmVhdGVkQXQiOiIyMDI2LTA1LTA3VDEzOjI5OjEwLjI5MloiLCJ1cGRhdGVkQXQiOiIyMDI2LTA1LTA3VDEzOjI5OjEwLjI5MloiLCJ1c2VybmFtZSI6InBhdGllbnQxIiwiZGlzcGxheVVzZXJuYW1lIjoicGF0aWVudDEiLCJ0d29GYWN0b3JFbmFibGVkIjpmYWxzZSwicm9sZSI6Imd1ZXN0IiwiYmFubmVkIjpmYWxzZSwiYmFuUmVhc29uIjpudWxsLCJiYW5FeHBpcmVzIjpudWxsLCJpZCI6InpEUVpmS2pWZXNoMTVpOFlYeTlFV21VWlU0OXdxZHQ2IiwiYWN0aXZlT3JnYW5pemF0aW9uSWQiOiIwZmI0MWU1MC04MmE0LTQ2MWUtOTZjNy1iZDExMzU5ZDg5MmQiLCJhY3RpdmVUZWFtSWQiOm51bGwsImFwcHMiOlt7ImlkIjoiY21vdmZkMXFwMDAwMDQ1dDc3ZXJoMjhkNiIsIm5hbWUiOiJUZWxlbWVkaWNpbmUiLCJzbHVnIjoidGVsZW1lZGljaW5lIiwibWVudXMiOlt7ImlkIjoiY21vdmZkMXU3MDAwMTQ1dDdyM3VhMDRzdyIsImxhYmVsIjoiUEFUSUVOVCIsInNsdWciOiJwYXRpZW50IiwiaWNvbiI6bnVsbCwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW92ZmQxdmIwMDAyNDV0N216NTk3Z3NqIiwibGFiZWwiOiJEYXNoYm9hcmQiLCJzbHVnIjoicGF0aWVudC1kYXNoYm9hcmQiLCJpY29uIjoibGF5b3V0LWRhc2hib2FyZCIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudCIsInR5cGUiOiJJVEVNIiwicGVybWlzc2lvbktleXMiOlsicGF0aWVudC1kYXNoYm9hcmQ6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQxdm8wMDAzNDV0N3U4YmdnMHVtIiwibGFiZWwiOiJQcm9maWxlIiwic2x1ZyI6InBhdGllbnQtcHJvZmlsZSIsImljb24iOiJ1c2VyLWNvZyIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudC9wcm9maWxlIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LXByb2ZpbGU6cmVhZCJdLCJjaGlsZHJlbiI6W119LHsiaWQiOiJjbW92ZmQxd2YwMDA0NDV0N2twZTIzOHFjIiwibGFiZWwiOiJBcHBvaW50bWVudHMiLCJzbHVnIjoicGF0aWVudC1hcHBvaW50bWVudHMtZ3JvdXAiLCJpY29uIjoiY2FsZW5kYXIiLCJocmVmIjpudWxsLCJ0eXBlIjoiR1JPVVAiLCJwZXJtaXNzaW9uS2V5cyI6W10sImNoaWxkcmVuIjpbeyJpZCI6ImNtb3ZmZDF3dzAwMDU0NXQ3Nm1nMTJzM2giLCJsYWJlbCI6IkFsbCBBcHBvaW50bWVudHMiLCJzbHVnIjoicGF0aWVudC1hcHBvaW50bWVudHMiLCJpY29uIjoiY2FsZW5kYXItY2xvY2siLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LWFwcG9pbnRtZW50czpyZWFkIl0sImNoaWxkcmVuIjpbXX0seyJpZCI6ImNtb3ZmZDF4aDAwMDY0NXQ3emhraWI0Y20iLCJsYWJlbCI6IkJvb2sgQXBwb2ludG1lbnQiLCJzbHVnIjoicGF0aWVudC1ib29rLWFwcG9pbnRtZW50IiwiaWNvbiI6ImNhbGVuZGFyLXBsdXMiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvYXBwb2ludG1lbnRzL2Jvb2siLCJ0eXBlIjoiSVRFTSIsInBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtYm9vay1hcHBvaW50bWVudDpyZWFkIl0sImNoaWxkcmVuIjpbXX1dfSx7ImlkIjoiY21vdmZkMXh3MDAwNzQ1dDdvMzF2ZmF0bSIsImxhYmVsIjoiQUkgSW50YWtlIiwic2x1ZyI6InBhdGllbnQtYWktaW50YWtlLWdyb3VwIiwiaWNvbiI6ImNsaXclipboard19saXN0IiwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW92ZmQxeWYwMDA4NDV0Y21vdmZkMXl1MDAwOTQ1dDc1eTNjYjhjZyIsImxhYmVsIjoiQ2hhdCBJbnRha2UiLCJzbHVnIjoidGF0aW9uLWdyb3VwIiwiaWNvbiI6InN0ZXRob3Njb3BlIiwiaHJlZiI6bnVsbCwidHlwZSI6IkdST1VQIiwicGVybWlzc2lvbktleXMiOltdLCJjaGlsZHJlbiI6W3siaWQiOiJjbW92ZmRhemIwMDBhNDV0N3NleDlnbzF5IiwibGFiZWwiOiJBSSBDb25zdWx0YXRpb24iLCJzbHVnIjoicGF0aWVudC1haS1jb25zdWx0eHQwMDBiNDV0NzBlM3NhNXptIiwibGFiZWwiOiJWb2ljZSBDb25zdWx0YXRpb24iLCJzbHVnIjoicGF0aWVudC1haS1jb25zdWx0YXRpb24tdm9pY2UiLCJpY29uIjoicGhvbmUiLCJocmVmIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQvY29uc3VsdGF0aW9uL3ZvaWNlIiwidHlwZSI6IklURU0iLCJwZXJtaXNzaW9uS2V5cyI6WyJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi12b2ljZTpyZWFkIl0sImNoaWxkcmVuIjpbXX0seyJpZCI6ImNtb3ZmZDIwNjw0NXRmN29kMSIsImxhYmVsIjoiQ2hhdCBDb25zdWx0YXRpb24iLCJzbHVnIjoicGF0aWVudC1haS1jb25zdWx0YXRpb24tY2hhdCIsImljb24iOiJtZXNzYWdlLWNpcmNsZSIsImhyZWYiOiIvYmV6cy90ZWxlbWVkaWNpbmUvcGF0aWVudC9jb25zdWx0YXRpb24vY2hhdCIsInR5cGUiOiJJVEVTSXBlcm1pc3Npb25LZXlzIjpbInBhdGllbnQtYWktY29uc3VsdGF0aW9uLWNoYXQ6cmVhZCJdLCJjaGlsZHJlbiI6W119XX1dfV0sInBlcm1pc3Npb25zIjpbInBhdGllbnQtZGFzaGJvYXJkOnJlYWQiLCJwYXRpZW50LXByb2ZpbGU6cmVhZCIsInBhdGllbnQtYXBwb2ludG1lbnRzOnJlYWQiLCJwYXRpZW50LWJvb2stYXBwb2ludG1lbnQ6cmVhZCIsInBhdGllbnQtaW50YWtlLXZvaWNlOnJlYWQiLCJwYXRpZW50LWludGFrZS1jaGF0OnJlYWQiLCJwYXRpZW50LWFpLWNvbnN1bHRhdGlvbi12b2ljZTpyZWFkIiwicGF0aWVudC1haS1jb25zdWx0YXRpb24tY2hhdDpyZWFkIiwicGF0aWVudC1jcmVhdGUiLCJwYXRpZW50OnJlYWQiLCJwYXRpZW50OnVwZGF0ZSIsInBhdGllbnQ6ZGVsZXRlIiwiYXBwb2ludG1lbnQ6Y3JlYXRlIiwiYXBwb2ludG1lbnQ6cmVhZCIsImFwcG9pbnRtZW50OnVwZGF0ZSIsImFwcG9pbnRtZW50OmRlbGV0ZSIsImVuY291bnRlcjpjcmVhdGUiLCJlbmNvdW50ZXI6cmVhZCIsImVuY291bnRlcjp1cGRhdGUiLCJlbmNvdW50ZXI6ZGVsZXRlIiwicXVlc3Rpb25uYWlyZV9yZXNwb25zZTpjcmVhdGUiLCJxdWVzdGlvbm5haXJlX3Jlc3BvbnNlOnJlYWQiLCJxdWVzdGlvbm5haXJlX3Jlc3BvbnNlOnVwZGF0ZSIsInF1ZXN0aW9ubmFpcmVfcmVzcG9uc2U6ZGVsZXRlIiwiY29uc3VsdGFnZW50OmNoYXQiLCJhZ2VudDpjaGF0IiwiY29uZGl0aW9uOmNyZWF0ZSIsImNvbmRpdGlvbjpkZWxldGUiLCJjb25kaXRpb246cmVhZCIsImNvbmRpdGlvbjp1cGRhdGUiLCJtZWRpY2F0aW9uX3JlcXVlc3Q6Y3JlYXRlIiwibWVkaWNhdGlvbl9yZXF1ZXN0OmRlbGV0ZSIsIm1lZGljYXRpb25fcmVxdWVzdDpyZWFkIiwibWVkaWNhdGlvbl9yZXF1ZXN0OnVwZGF0ZSIsIm9ic2VydmF0aW9uOmNyZWF0ZSIsIm9ic2VydmF0aW9uOmRlbGV0ZSIsIm9ic2VydmF0aW9uOnJlYWQiLCJvYnNlcnZhdGlvbi91cGRhdGUiLCJvcmc6Y3JlYXRlIiwib3JnOmRlbGV0ZSIsIm9yZzpyZWFkIiwib3JnOnVwZGF0ZSIsInNlcnZpY2VfcmVxdWVzdDpjcmVhdGUiLCJzZXJ2aWNlX3JlcXVlc3Q6ZGVsZXRlIiwic2VydmljZV9yZXF1ZXN0OnJlYWQiLCJzZXVwZGF0ZSIsInNsb3Q6Y3JlYXRlIiwic2xvdDpkZWxldGUiLCJzbG90OnJlYWQiLCJzbG90OnVwZGF0ZSIsInRlcm1pbm9sb2d5OnJlYWQiLCJwcmFjdGl0aW9uZXJfcm9sZTpkZWxldGUiLCJwcmFjdGl0aW9uZXJfcm9sZTpjcmVhdGUiLCJwcmFjdGl0aW9uZXJfcm9sZSp1cGRhdGUiLCJwcmFjdGl0aW9uZXJfcm9sZTypZWFkIiwicHJhY3RpdGlvbmVyOmNyZWF0ZSIsBuildingX3ByYWN0aXRpb25lcjpkZWxldGUiLCJwcmFjdGl0aW9uZXI6cmVhZCIsInByYWN0aXRpb25lcjp1cGRhdGUiXSwib3JnYW5pemF0aW9ucyI6W3siaWQiOiIwZmI0MWU1MC04MmE0LTY2MWUtOTZjNy1iZDExMzU5ZDg5MmQiLCJuYW1lIjoiZHJnb2RseSIsInNsdWciOiJkcmdvZGx5IiwibG9nbyI6bnVsbH1dLCJhY3RpdmVPcmdhbml6YXRpb25Sb2xlcyI6WyJwYXRpZW50Il0sImFjdGl2ZVJvbGVJZCI6IjVjZDg1NjIxLTk0YzctNDVmOS1iNzU1LTg3Y2ZlMTk3YmMwZCIsImFjdGl2ZVJvbGUiOiJwYXRpZW50IiwiYWN0aXZlUm9sZVJlZGlyZWN0VXJsIjoiL2JlenMvdGVsZW1lZGljaW5lL3BhdGllbnQiLCJzdWIiOiJ6RFFaZktqVmVzaDE1aThZWHk5RVdtVVpVNDl3cWR0NiIsImV4cCI6MTc4MTk0MDEyNCLCJpc3MiOiJodHRwczovL2lhbS5kcmdvZGxlyLmNvbSIsImF1ZCI6Imh0dHBzOi8vaWFtLmRyZ29kbHkuY29tIn0.GhGlnxrAHbbe0UJtS-0JKguLCYSuDAOn8I_tXhA922zXH2rCo0cI2MShOMv_mgQ5JOlTsmuk-Jc1diiR6XQWBQ";
+
+            ws = new WebSocket(`ws://localhost:8000/audio?token=${token}`);
+
+            ws.onopen = async () => {
+                console.log("Connected to server");
+                statusEl.innerText = "Connected";
+                micEl.classList.add("recording");
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new AudioContext({ sampleRate: 16000 });
+
+                source = audioContext.createMediaStreamSource(mediaStream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                processor.onaudioprocess = (event) => {
+                    const input = event.inputBuffer.getChannelData(0);
+                    const pcm = new Int16Array(input.length);
+
+                    for (let i = 0; i < input.length; i++) {
+                        let s = Math.max(-1, Math.min(1, input[i]));
+                        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(pcm.buffer);
+                    }
+                };
+            };
+
+            ws.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === "transcript") {
+                    transcriptEl.innerHTML = data.text;
+                }
+
+                if (data.type === "text_delta") {
+                    assistantEl.innerHTML += data.text;
+                }
+
+                if (data.type === "assistant_text") {
+                    assistantEl.innerHTML = data.text;
+                }
+
+                if (data.type === "audio") {
+                    if (data.audio && typeof data.audio === "string" && data.audio.trim().length > 0) {
+                        // 🌟 Direct Base64 to ArrayBuffer streaming processor injection
+                        playStreamingBuffer(data.audio);
+                    }
+                }
+
+                if (data.type === "error") {
+                    console.error(data.message);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.log("WebSocket Error: ", error);
+            };
+
+            ws.onclose = () => {
+                console.log("Disconnected from server");
+                stopVoice();
+            };
+        }
+
+        // 🌟 New Linear ArrayBuffer Scheduler Engine
+        function playStreamingBuffer(base64Data) {
+            if (!playbackContext) return;
+
+            // Strip incoming WAV structural headers from middle chunks if present
+            let cleanBase64 = base64Data;
+            if (cleanBase64.startsWith("UklGR")) {
+                // Contains RIFF WAV text marker header block, bypass bytes 0-44
+                const rawBinary = atob(cleanBase64);
+                if (rawBinary.length > 44) {
+                    const headerlessBinary = rawBinary.substring(44);
+                    cleanBase64 = btoa(headerlessBinary);
+                }
+            }
+
+            // Convert base64 straight to standard binary array buffer context
+            const binaryString = window.atob(cleanBase64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            // Parse continuous PCM 16-bit Mono data frames directly
+            const rawPCM = new Int16Array(bytes.buffer);
+            const bufferLength = rawPCM.length;
+
+            if (bufferLength === 0) return;
+
+            // Build native hardware audio data buffers dynamically
+            const audioBuffer = playbackContext.createBuffer(1, bufferLength, 24000);
+            const channelData = audioBuffer.getChannelData(0);
+
+            for (let i = 0; i < bufferLength; i++) {
+                channelData[i] = rawPCM[i] / 32768.0;
+            }
+
+            // Frame timestamp synchronization scheduler
+            const bufferSource = playbackContext.createBufferSource();
+            bufferSource.buffer = audioBuffer;
+            bufferSource.connect(playbackContext.destination);
+
+            const currentTime = playbackContext.currentTime;
+            if (nextStartTime < currentTime) {
+                nextStartTime = currentTime;
+            }
+
+            bufferSource.start(nextStartTime);
+            nextStartTime += audioBuffer.duration;
+        }
+
+        function stopVoice() {
+            if (processor) processor.disconnect();
+            if (source) source.disconnect();
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (audioContext && audioContext.state !== "closed") {
+                audioContext.close();
+            }
+            if (playbackContext && playbackContext.state !== "closed") {
+                playbackContext.close();
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+
+            ws = null;
+            playbackContext = null;
+            micEl.classList.remove("recording");
+            statusEl.innerText = "Disconnected";
+        }
+    </script>
+
+    <!-- <script>
         let ws = null;
         let audioContext = null;
         let processor = null;
@@ -289,7 +458,7 @@
             audioQueue = [];
             isPlaying = false;
         }
-    </script>
+    </script> -->
 </body>
 
 </html>
