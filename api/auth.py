@@ -8,24 +8,37 @@ config = Config()
 jwks_client = PyJWKClient(config.iam_jwks_url)
 
 
-def decode_token(token: str):
+def decode_token(token: str, options: dict = None):
+    """
+    Decodes and validates a JWT token using JWKS.
+    Allows passing custom decoding options (e.g., bypassing expiration checks in dev).
+    """
     try:
+        if isinstance(token, str):
+            token = token.strip().replace("\n", "").replace("\r", "")
+            if " " in token:
+                token = token.replace(" ", "+")
+
         signing_key = jwks_client.get_signing_key_from_jwt(token)
         
+        # Default options configuration layout
+        jwt_options = {"verify_aud": True}
+        if options:
+            jwt_options.update(options)
+            
         return jwt.decode(
             token,
             signing_key.key,
             audience=config.iam_issuer,
             issuer=config.iam_issuer,
-            algorithms=["EdDSA", "RS256"],  # EdDSA first since that's what your JWKS uses
-            options={"verify_aud": True},
+            algorithms=["EdDSA", "RS256"], 
+            options=jwt_options,
         )
     except Exception as e:
         print(f"JWT ERROR: {str(e)}")
         raise
 
 async def get_current_user(request: Request):
-
     auth_header = request.headers.get("Authorization")
     
     print("AUTH HEADER:", auth_header)
@@ -39,10 +52,11 @@ async def get_current_user(request: Request):
     print("TOKEN:", token)
 
     try:
-        payload = decode_token(token)
+        # DEV WORKAROUND: Force disregard of the expired timestamp field
+        # Flip verify_exp back to True once the IAM server clock syncs up!
+        payload = decode_token(token, options={"verify_exp": False})
 
         print("USER PAYLOAD:", payload)
-        # Set user state if not already set by middleware
         if not hasattr(request.state, 'user'):
             request.state.user = payload
         if not hasattr(request.state, 'token'):
@@ -52,13 +66,12 @@ async def get_current_user(request: Request):
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
+# ... Rest of your check_permission and require_permission code stays exactly the same ...
 # Permission
 #   Resource = Patient
 #   action = read

@@ -43,25 +43,28 @@ class VoiceSession:
                 token = event.data["content"]
                 sentence_buffer += token
 
+                yield {"type": "text", "content": token}
+                # await self.tts.send_text(token)
+
                 # If we hit a natural sentence boundary, send it immediately to TTS
                 if re.search(r"[.!?]\s*$", sentence_buffer):
                     if sentence_buffer.strip():
-                        print(f"Sending to TTS: {sentence_buffer.strip()}")
+                        # print(f"Sending to TTS: {sentence_buffer.strip()}")
                         await self.tts.send_text(sentence_buffer)
                         await self.tts.flush()
                         
                         async for audio_bytes in self._drain_tts():
-                            yield audio_bytes
+                            yield {"type": "audio", "content": audio_bytes}
                         
                         sentence_buffer = ""
 
         # Flush any trailing tokens left in the buffer at completion
         if sentence_buffer.strip():
-            print(f"Sending trailing buffer to TTS: {sentence_buffer.strip()}")
+            # print(f"Sending trailing buffer to TTS: {sentence_buffer.strip()}")
             await self.tts.send_text(sentence_buffer)
             await self.tts.flush()
             async for audio_bytes in self._drain_tts():
-                yield audio_bytes
+                yield {"type": "audio", "content": audio_bytes}
 
     async def text_to_audio(self, text: str):
         await self.tts.send_text(text)
@@ -70,7 +73,7 @@ class VoiceSession:
         async for audio_bytes in self._drain_tts():
             yield audio_bytes
 
-            
+
 # from __future__ import annotations
 # import re
 # import base64

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from agent.agent import Agent
 from config.config import Config
-from api.routers.agent import router as agent_router
+# from api.routers.agent import router as agent_router
 from api.wsrouters.webs2s import router as websocket_router
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
@@ -144,7 +144,7 @@ def create_app():
 
         return response
 
-    app.include_router(agent_router, prefix="/api")
+    # app.include_router(agent_router, prefix="/api")
     app.include_router(websocket_router)
 
     
