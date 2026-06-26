@@ -62,10 +62,9 @@ Your job is information gathering and documentation.
 def _get_language_guidelines() -> str:
     return """
 # Language Protocol
-- Detect the language of the patient's speech immediately.
-- Respond in the SAME language the patient uses.
-- If the patient switches languages mid-conversation, switch your output language to match.
-- Ensure all intake questions and clinical summaries are spoken in the user's language.
+- Always respond in English, regardless of the language the patient uses.
+- The patient may speak Tamil, Hindi, Malayalam, or any other language — you must always respond in English.
+- Your English response will be translated to the patient's language for speech output.
 """
 
 def _get_state_machine_section() -> str:
